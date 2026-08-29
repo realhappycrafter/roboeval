@@ -1,45 +1,34 @@
 # -*- coding: utf-8 -*-
-"""血缘播种：从 WSL 训练产物目录读取 train_config.json，登记真实实验与检查点。
+"""血缘播种：自动发现 WSL 中的 LeRobot 训练产物并登记进数据库。
 
-幂等：每次运行先清空 experiments/checkpoints/annotations 关联表再写入。
+扫描规则：在每个 OUTPUT_ROOTS 下的 <job>/checkpoints/**/pretrained_model/train_config.json
+视为一个检查点，同一 job 目录归为一个训练实验。
+
+幂等：每次运行先清空 experiments/checkpoints 及下游关联表再写入。
 用法：python lineage_seeder.py
 """
 import json
+import re
 from pathlib import Path
 
 from db import get_conn, init_db
 
-WSL_ROOT = Path(
-    "//wsl.localhost/Ubuntu/home/happy_711890/.cache/huggingface/lerobot/seeedstudio123"
-)
-OUTPUTS = WSL_ROOT / "outputs" / "train"
+WSL_HOME = Path("//wsl.localhost/Ubuntu/home/happy_711890")
 
-# 实验登记清单：只登记磁盘上真实存在的产物
-EXPERIMENTS = [
-    {
-        "name": "act_so101_test",
-        "model": "act",
-        "config": OUTPUTS / "act_so101_test" / "checkpoints" / "last" / "pretrained_model" / "train_config.json",
-        "ckpts": [
-            ("last", OUTPUTS / "act_so101_test" / "checkpoints" / "last" / "pretrained_model"),
-        ],
-        "notes": "首次 ACT 训练（1000 步）。训练日志结尾出现 dataloader pin_memory 线程异常，训练提前中断。",
-    },
-    {
-        "name": "act_so101_verify",
-        "model": "act",
-        "config": OUTPUTS / "act_so101_verify" / "checkpoints" / "000010" / "pretrained_model" / "train_config.json",
-        "ckpts": [
-            ("000010", OUTPUTS / "act_so101_verify" / "checkpoints" / "000010" / "pretrained_model"),
-        ],
-        "notes": "训练链路验证：10 步短训，确认 LeRobot 训练管线可跑通。",
-    },
+OUTPUT_ROOTS = [
+    ("wsl-home", WSL_HOME / "outputs" / "train"),
+    ("lerobot-repo", WSL_HOME / "lerobot" / "outputs" / "train"),
+    ("hf-cache", WSL_HOME / ".cache" / "huggingface" / "lerobot" / "seeedstudio123" / "outputs" / "train"),
 ]
+
+NOTES = {
+    "act_so101_best": "完整训练：10 万步 ACT，每 1 万步保存检查点，数据集 seeedstudio123/test_merged。",
+    "act_so101_test": "训练链路测试（短步数），用于验证训练/检查点保存流程。",
+    "act_so101_verify": "训练管线验证（短步数），确认 LeRobot 训练可跑通。",
+}
 
 
 def load_config(path: Path) -> dict:
-    if not path.exists():
-        return {}
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception as e:  # noqa: BLE001
@@ -70,6 +59,53 @@ def extract(cfg: dict) -> dict:
     }
 
 
+def _step_from_dir(path: Path) -> int | None:
+    """从检查点目录名（如 010000、last）推断步数。"""
+    for part in reversed(path.parts):
+        if re.fullmatch(r"\d{5,}", part):
+            return int(part)
+    return None
+
+
+def discover() -> list[dict]:
+    """返回 [{name, source, job_dir, config, ckpts:[(step, path)]}]"""
+    jobs: dict[tuple[str, str], dict] = {}
+    for source, root in OUTPUT_ROOTS:
+        if not root.exists():
+            print(f"[seeder] 根目录不存在，跳过: {root}")
+            continue
+        for job_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+            configs = sorted(job_dir.glob("checkpoints/**/pretrained_model/train_config.json"))
+            if not configs:
+                continue
+            key = (source, job_dir.name)
+            jobs.setdefault(key, {"name": job_dir.name, "source": source,
+                                  "job_dir": job_dir, "configs": []})
+            jobs[key]["configs"].extend(configs)
+    out = []
+    for (source, job_name), data in jobs.items():
+        # 用 steps 最大的配置作为实验超参代表（通常是最终配置）
+        best_cfg, best_steps = {}, -1
+        ckpts = []
+        for cfg_path in data["configs"]:
+            cfg = load_config(cfg_path)
+            if not cfg:
+                continue
+            hp = extract(cfg)
+            if (hp.get("steps") or 0) > best_steps:
+                best_cfg, best_steps = hp, hp.get("steps") or 0
+            step = _step_from_dir(cfg_path.parent.parent) or hp.get("steps")
+            ckpts.append((step, str(cfg_path.parent)))
+        out.append({
+            "name": f"{job_name} [{source}]",
+            "source": source,
+            "job_dir": data["job_dir"],
+            "hyperparams": best_cfg,
+            "ckpts": sorted(ckpts, key=lambda x: (x[0] is None, x[0])),
+        })
+    return out
+
+
 def main() -> None:
     init_db()
     conn = get_conn()
@@ -78,39 +114,30 @@ def main() -> None:
     conn.execute("DELETE FROM checkpoints")
     conn.execute("DELETE FROM experiments")
 
-    for exp in EXPERIMENTS:
-        cfg = load_config(exp["config"])
-        hp = extract(cfg)
-        if not hp["steps"]:
-            print(f"[seeder] 跳过 {exp['name']}：配置不存在")
-            continue
+    for exp in discover():
+        hp = exp["hyperparams"]
         cur = conn.execute(
             "INSERT INTO experiments (name, model, dataset_names, hyperparams, log_path, notes)"
             " VALUES (?,?,?,?,?,?)",
             (
                 exp["name"],
-                exp["model"],
-                hp["dataset_repo"],
+                hp.get("policy_type") or "act",
+                hp.get("dataset_repo"),
                 json.dumps(hp, ensure_ascii=False),
-                str(OUTPUTS.parent.parent / "train_act_so101_test.log") if "test" in exp["name"] else None,
-                exp["notes"],
+                str(exp["job_dir"]),
+                NOTES.get(exp["name"].split(" [")[0], ""),
             ),
         )
         exp_id = cur.lastrowid
-        n_ckpt = 0
-        for step_label, ckpt_dir in exp["ckpts"]:
-            if not ckpt_dir.exists():
-                print(f"[seeder] 检查点不存在，跳过: {ckpt_dir}")
-                continue
-            step = int(step_label) if step_label.isdigit() else None
+        for step, ckpt_path in exp["ckpts"]:
             conn.execute(
                 "INSERT INTO checkpoints (experiment_id, step, path) VALUES (?,?,?)",
-                (exp_id, step, str(ckpt_dir)),
+                (exp_id, step, ckpt_path),
             )
-            n_ckpt += 1
         print(
-            f"[seeder] {exp['name']}: model={hp['policy_type']}, steps={hp['steps']}, "
-            f"lr={hp['lr']}, batch={hp['batch_size']}, dataset={hp['dataset_repo']}, 检查点 {n_ckpt} 个"
+            f"[seeder] {exp['name']}: model={hp.get('policy_type')}, steps={hp.get('steps')}, "
+            f"lr={hp.get('lr')}, batch={hp.get('batch_size')}, dataset={hp.get('dataset_repo')}, "
+            f"检查点 {len(exp['ckpts'])} 个"
         )
 
     conn.commit()
