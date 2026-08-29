@@ -124,6 +124,19 @@
 
   <div class="panel">
     <h2>数据集一览（点击行查看 episodes）</h2>
+    <div style="padding:14px 18px; border-bottom:1px solid var(--line); display:flex; gap:10px;
+                align-items:flex-end; flex-wrap:wrap; background:#fafbfc;">
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">导入数据集目录</div>
+        <input id="ds-path" placeholder="单个数据集目录，或包含多个数据集的父目录"
+               style="padding:6px 10px;border:1px solid var(--line);border-radius:8px;
+                      font-size:12px;min-width:360px">
+      </div>
+      <button class="btn" onclick="importDatasets()" style="background:var(--brand);color:#fff">
+        📥 导入数据集</button>
+      <button class="btn" onclick="rescanBuiltin()">🔄 重扫内置目录</button>
+      <span id="ds-hint" style="font-size:12px;color:var(--muted)"></span>
+    </div>
     <table>
       <thead><tr>
         <th>数据集</th><th>机器人</th><th>Episodes</th><th>总帧数</th><th>FPS</th><th>相机</th><th>来源</th>
@@ -150,6 +163,46 @@ async function loadStats() {
     ['数据集', s.datasets], ['Episodes', s.episodes], ['总帧数', fmt(s.total_frames)],
     ['训练实验', s.experiments], ['Checkpoint', s.checkpoints], ['评测 Rollout', s.rollouts]
   ].map(([l, v]) => `<div class="card"><div class="num">${v}</div><div class="label">${l}</div></div>`).join('');
+}
+async function importDatasets() {
+  const hint = document.getElementById('ds-hint');
+  const path = document.getElementById('ds-path').value.trim();
+  if (!path) return alert('请输入数据集目录路径');
+  hint.textContent = '扫描中…';
+  try {
+    const r = await fetch('/api/datasets/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    });
+    const d = await r.json();
+    hint.textContent = r.ok ? `✅ ${d.message}` : `❌ ${d.detail || d.message}`;
+    if (r.ok) { document.getElementById('ds-path').value = ''; loadDatasets(); loadStats(); }
+  } catch (e) { hint.textContent = '❌ ' + e.message; }
+}
+async function rescanBuiltin() {
+  const hint = document.getElementById('ds-hint');
+  hint.textContent = '重扫中…';
+  await fetch('/api/scan', { method: 'POST' });
+  hint.textContent = '✅ 内置目录已重扫';
+  loadDatasets(); loadStats();
+}
+async function importExperiments() {
+  const hint = document.getElementById('exp-hint');
+  const path = document.getElementById('exp-path').value.trim();
+  if (!path) return alert('请输入训练产物目录路径');
+  hint.textContent = '扫描中…';
+  try {
+    const r = await fetch('/api/experiments/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    });
+    const d = await r.json();
+    hint.textContent = r.ok ? `✅ ${d.message}` : `❌ ${d.detail || d.message}`;
+    if (r.ok) {
+      document.getElementById('exp-path').value = '';
+      loadExperiments(); loadStats(); loadCheckpoints();
+    }
+  } catch (e) { hint.textContent = '❌ ' + e.message; }
 }
 async function loadDatasets() {
   const rows = await (await fetch('/api/datasets')).json();
