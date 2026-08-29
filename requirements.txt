@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+pandas
+pyarrow
+httpx
+python-dotenv
+openai
+imageio-ffmpeg
