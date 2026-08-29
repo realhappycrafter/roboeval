@@ -47,6 +47,56 @@ def scan():
     return run_scan(reset=True)
 
 
+@app.post("/api/datasets/import")
+def import_datasets(payload: dict):
+    """导入任意目录：单个 LeRobot 数据集目录，或包含多个数据集的父目录。"""
+    import scanner
+
+    raw = (payload or {}).get("path", "").strip()
+    source = (payload or {}).get("source") or "user-import"
+    if not raw:
+        raise HTTPException(422, "path 不能为空")
+    root = Path(raw)
+    if not root.exists() or not root.is_dir():
+        raise HTTPException(422, f"目录不存在: {raw}")
+    recs = scanner.scan_directory(root, source)
+    if not recs:
+        return {"imported": 0, "message": "该目录下未找到 LeRobot 数据集（需含 meta/info.json）"}
+    n_ds, n_ep = scanner.ingest(recs)
+    return {
+        "imported": n_ds,
+        "episodes": n_ep,
+        "names": [r["name"] for r in recs],
+        "message": f"成功导入 {n_ds} 个数据集、{n_ep} 条 episodes",
+    }
+
+
+@app.post("/api/experiments/import")
+def import_experiments(payload: dict):
+    """导入训练产物目录：train 根目录（多个 job）或单个 job 目录。"""
+    import lineage_seeder as seeder
+
+    raw = (payload or {}).get("path", "").strip()
+    source = (payload or {}).get("source") or "user-import"
+    if not raw:
+        raise HTTPException(422, "path 不能为空")
+    root = Path(raw)
+    if not root.exists() or not root.is_dir():
+        raise HTTPException(422, f"目录不存在: {raw}")
+    experiments = seeder.discover([(source, root)])
+    if not experiments:
+        return {"imported": 0, "message": "该目录下未找到训练产物（需含 checkpoints/.../train_config.json）"}
+    for exp in experiments:
+        exp["notes"] = "用户导入：" + (exp.get("notes") or "")
+    n_exp, n_ck = seeder.register(experiments)
+    return {
+        "imported": n_exp,
+        "checkpoints": n_ck,
+        "names": [e["name"] for e in experiments],
+        "message": f"成功导入 {n_exp} 个实验、{n_ck} 个检查点",
+    }
+
+
 @app.get("/api/datasets")
 def list_datasets():
     import json as _json
