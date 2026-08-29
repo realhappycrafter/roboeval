@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RoboEval · 具身智能策略评测平台</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --line: #e5e7eb;
+    --ink: #1f2937; --muted: #6b7280; --brand: #2563eb; --ok: #16a34a; --soft: #eff6ff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Microsoft YaHei", system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+  header { background: var(--card); border-bottom: 1px solid var(--line); padding: 14px 28px;
+           display: flex; align-items: center; gap: 12px; }
+  header .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--brand);
+                 color: #fff; display: grid; place-items: center; font-weight: 700; }
+  header h1 { font-size: 17px; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  main { max-width: 1080px; margin: 24px auto; padding: 0 20px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .card .num { font-size: 26px; font-weight: 700; color: var(--brand); }
+  .card .label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .panel h2 { font-size: 14px; padding: 14px 18px; border-bottom: 1px solid var(--line); background: #fafbfc; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 18px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; background: #fafbfc; }
+  tr:hover td { background: var(--soft); cursor: pointer; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+         background: var(--soft); color: var(--brand); margin-right: 4px; }
+  .btn { padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card);
+         font-size: 12px; cursor: pointer; }
+  .btn:hover { background: var(--soft); }
+  .foot { text-align: center; color: var(--muted); font-size: 12px; padding: 24px 0; }
+  .detail { display: none; margin-top: 16px; }
+  .detail.show { display: block; }
+  .badge { padding: 1px 6px; border-radius: 6px; font-size: 11px; background: #f3f4f6; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">R</div>
+  <div>
+    <h1>RoboEval</h1>
+    <div class="sub">具身智能策略评测与数据闭环平台 · LeRobot 生态</div>
+  </div>
+</header>
+<main>
+  <div class="cards" id="cards"></div>
+
+  <div class="panel" style="margin-bottom: 22px;">
+    <h2>训练实验（来自 WSL 真实训练产物）</h2>
+    <table>
+      <thead><tr>
+        <th>实验</th><th>模型</th><th>训练步数</th><th>学习率</th><th>Batch</th><th>数据集</th><th>检查点</th><th>备注</th>
+      </tr></thead>
+      <tbody id="exp-body"><tr><td colspan="8">加载中…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="panel" style="margin-bottom: 22px;">
+    <h2>数据飞轮报告（评测聚合 → 归因热力 → 采集建议）</h2>
+    <div style="display:flex; gap:20px; padding:16px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:260px;">
+        <div style="font-size:13px; font-weight:600; margin-bottom:10px;">各实验评测成功率</div>
+        <div id="report-rates">加载中…</div>
+      </div>
+      <div style="flex:2; min-width:320px;">
+        <div style="font-size:13px; font-weight:600; margin-bottom:10px;">失败阶段 × 原因热力（AI 归因聚合）</div>
+        <div id="report-heat">加载中…</div>
+      </div>
+    </div>
+    <div style="padding:0 16px 16px;">
+      <div style="font-size:13px; font-weight:600; margin-bottom:10px;">💡 AI 采集建议（反哺下一轮数据采集）</div>
+      <div id="report-advice">加载中…</div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-bottom: 22px;">
+    <h2>评测 Rollouts（点击行播放视频并标注）</h2>
+    <table>
+      <thead><tr>
+        <th>#</th><th>视频</th><th>实验</th><th>检查点</th><th>结果</th><th>归因条数</th><th>备注</th>
+      </tr></thead>
+      <tbody id="ro-body"><tr><td colspan="7">加载中…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="panel detail" id="player-panel" style="margin-bottom: 22px;">
+    <h2 id="player-title">评测回放</h2>
+    <div style="display:flex; gap:18px; padding:16px; flex-wrap:wrap;">
+      <video id="player" controls style="flex:2; min-width:420px; max-width:640px; border-radius:8px; background:#000;"></video>
+      <div style="flex:1; min-width:240px;">
+        <div style="font-size:13px; font-weight:600; margin-bottom:8px;">结果标注</div>
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
+          <button class="btn" onclick="markResult('success')">✅ 成功</button>
+          <button class="btn" onclick="markResult('failure')">❌ 失败</button>
+          <button class="btn" onclick="markResult('unknown')">⭕ 待定</button>
+        </div>
+        <div style="font-size:13px; font-weight:600; margin-bottom:8px;">AI 归因</div>
+        <button class="btn" id="btn-attr" onclick="runAttribution()" style="background:var(--brand); color:#fff;">🤖 运行 AI 归因</button>
+        <div id="attr-list" style="margin-top:12px; font-size:12px; color:var(--muted);">点击按钮开始（约 20-60 秒）</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>数据集一览（点击行查看 episodes）</h2>
+    <table>
+      <thead><tr>
+        <th>数据集</th><th>机器人</th><th>Episodes</th><th>总帧数</th><th>FPS</th><th>相机</th><th>来源</th>
+      </tr></thead>
+      <tbody id="ds-body"><tr><td colspan="7">加载中…</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="panel detail" id="detail">
+    <h2 id="detail-title">Episodes</h2>
+    <table>
+      <thead><tr><th>#</th><th>Episode Index</th><th>帧数</th><th>任务</th></tr></thead>
+      <tbody id="ep-body"></tbody>
+    </table>
+  </div>
+
+  <div class="foot">RoboEval v0.1 · W1 里程碑：真实数据集血缘入库 · 数据不出本机</div>
+</main>
+<script>
+const fmt = n => (n ?? 0).toLocaleString();
+async function loadStats() {
+  const s = await (await fetch('/api/stats')).json();
+  document.getElementById('cards').innerHTML = [
+    ['数据集', s.datasets], ['Episodes', s.episodes], ['总帧数', fmt(s.total_frames)],
+    ['训练实验', s.experiments], ['Checkpoint', s.checkpoints], ['评测 Rollout', s.rollouts]
+  ].map(([l, v]) => `<div class="card"><div class="num">${v}</div><div class="label">${l}</div></div>`).join('');
+}
+async function loadDatasets() {
+  const rows = await (await fetch('/api/datasets')).json();
+  document.getElementById('ds-body').innerHTML = rows.map(d => `
+    <tr onclick="showEpisodes(${d.id}, '${d.name}', ${d.total_episodes})">
+      <td><b>${d.name}</b></td>
+      <td><span class="badge">${d.robot_type || '-'}</span></td>
+      <td>${d.total_episodes}</td>
+      <td>${fmt(d.total_frames)}</td>
+      <td>${d.fps}</td>
+      <td>${(d.cameras || []).map(c => `<span class="tag">${c.replace('observation.images.', '')}</span>`).join('')}</td>
+      <td><span class="badge">${d.source}</span></td>
+    </tr>`).join('');
+}
+async function showEpisodes(id, name, total) {
+  const data = await (await fetch(`/api/datasets/${id}/episodes`)).json();
+  document.getElementById('detail').classList.add('show');
+  document.getElementById('detail-title').textContent = `${name} · ${data.episodes.length} 条 Episodes`;
+  document.getElementById('ep-body').innerHTML = data.episodes.map(e => `
+    <tr><td></td><td>episode_${String(e.episode_index).padStart(6, '0')}</td>
+    <td>${e.length ?? '-'}</td><td>${(e.task || '-').slice(0, 80)}</td></tr>`).join('');
+  document.getElementById('detail').scrollIntoView({ behavior: 'smooth' });
+}
+async function loadExperiments() {
+  const rows = await (await fetch('/api/experiments')).json();
+  document.getElementById('exp-body').innerHTML = rows.map(e => {
+    const hp = e.hyperparams || {};
+    return `<tr>
+      <td><b>${e.name}</b></td>
+      <td><span class="badge">${e.model}</span></td>
+      <td>${hp.steps ?? '-'}</td>
+      <td>${hp.lr ?? '-'}</td>
+      <td>${hp.batch_size ?? '-'}</td>
+      <td>${e.dataset_names || '-'}</td>
+      <td>${e.ckpt_count}</td>
+      <td style="max-width:260px;font-size:12px;color:var(--muted)">${e.notes || ''}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8">暂无实验记录</td></tr>';
+}
+const RESULT_BADGE = { success: ['✅ 成功', 'var(--ok)'], failure: ['❌ 失败', '#dc2626'], unknown: ['⭕ 待定', 'var(--muted)'] };
+let currentRollout = null;
+async function loadRollouts() {
+  const rows = await (await fetch('/api/rollouts')).json();
+  document.getElementById('ro-body').innerHTML = rows.map(r => {
+    const [label, color] = RESULT_BADGE[r.result] || RESULT_BADGE.unknown;
+    const fname = (r.video_path || '').split('/').pop();
+    return `<tr onclick="playRollout(${r.id}, '${r.video_path}', '${r.experiment_name || '-'}', '${r.ckpt_step ?? '-'}')">
+      <td>${r.id}</td><td><b>${fname}</b></td>
+      <td>${r.experiment_name || '-'}</td>
+      <td>${r.ckpt_step ?? '-'}</td>
+      <td><span style="color:${color};font-weight:600">${label}</span></td>
+      <td>${r.annotation_count}</td>
+      <td style="max-width:220px;font-size:12px;color:var(--muted)">${r.notes || ''}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7">暂无 rollout，运行 seed_rollouts.py 登记</td></tr>';
+}
+function playRollout(id, videoPath, expName, ckptStep) {
+  currentRollout = id;
+  document.getElementById('player-panel').classList.add('show');
+  document.getElementById('player-title').textContent = `评测回放 · Rollout #${id} · ${expName}@${ckptStep}`;
+  document.getElementById('player').src = `/api/media/${videoPath}`;
+  refreshAnnotations();
+  document.getElementById('player-panel').scrollIntoView({ behavior: 'smooth' });
+}
+async function markResult(result) {
+  if (currentRollout == null) return alert('请先点击上方 rollout 行');
+  await fetch(`/api/rollouts/${currentRollout}/result`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ result })
+  });
+  loadRollouts(); loadStats(); loadReport();
+}
+async function runAttribution() {
+  if (currentRollout == null) return alert('请先点击上方 rollout 行');
+  const box = document.getElementById('attr-list');
+  box.innerHTML = '<span style="color:var(--brand)">🤖 AI 归因中：抽帧 + qwen-vl-max 推理，约需 20-60 秒…</span>';
+  try {
+    const r = await fetch(`/api/rollouts/${currentRollout}/attribute`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || r.status);
+    await refreshAnnotations();
+    loadRollouts(); loadStats();
+  } catch (e) {
+    box.innerHTML = `<span style="color:#dc2626">归因失败: ${e.message}</span>`;
+  }
+}
+async function refreshAnnotations() {
+  const list = await (await fetch(`/api/rollouts/${currentRollout}/annotations`)).json();
+  const box = document.getElementById('attr-list');
+  box.innerHTML = list.length
+    ? list.map(a => {
+        const conf = a.confidence != null ? ` <b style="color:var(--brand)">${(a.confidence * 100).toFixed(0)}%</b>` : '';
+        const icon = a.stage === '建议' ? '💡' : a.stage === '总结' ? '📋' : a.source === 'ai' ? '🤖' : '👤';
+        const stageTag = ['建议', '总结'].includes(a.stage) ? '' : `<span class="tag">${a.stage || '-'}</span>`;
+        return `<div style="margin-bottom:6px">${icon} ${stageTag}${a.cause || ''}${conf}</div>`;
+      }).join('')
+    : '暂无归因记录';
+}
+async function loadReport() {
+  const rep = await (await fetch('/api/report')).json();
+  // 成功率
+  document.getElementById('report-rates').innerHTML = rep.per_experiment.map(e => {
+    const judged = e.success + e.failure;
+    const rate = judged ? Math.round(e.success / judged * 100) : null;
+    return `<div style="margin-bottom:12px">
+      <div style="font-size:12px;color:var(--muted);display:flex;justify-content:space-between">
+        <span>${e.name} <span class="badge">${e.model}</span></span>
+        <span>${judged ? `✅${e.success} ❌${e.failure} ⭕${e.unknown}` : '暂无评测'}</span>
+      </div>
+      <div style="background:#f3f4f6;border-radius:6px;height:14px;margin-top:4px;overflow:hidden">
+        <div style="width:${rate ?? 0}%;height:100%;background:${rate >= 60 ? 'var(--ok)' : rate == null ? '#d1d5db' : '#f59e0b'}"></div>
+      </div>
+      ${judged ? `<div style="font-size:12px;margin-top:2px;color:${rate >= 60 ? 'var(--ok)' : '#b45309'};font-weight:600">成功率 ${rate}%（${e.success}/${judged} 已判定）</div>` : ''}
+    </div>`;
+  }).join('') || '<div style="font-size:12px;color:var(--muted)">暂无实验评测数据</div>';
+  // 失败热力
+  const stages = rep.failure_stages || {};
+  const stageNames = Object.keys(stages);
+  let maxCnt = 1;
+  stageNames.forEach(s => stages[s].forEach(c => maxCnt = Math.max(maxCnt, c.count)));
+  document.getElementById('report-heat').innerHTML = stageNames.length
+    ? stageNames.map(s => `
+      <div style="margin-bottom:10px">
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px"><span class="tag">${s}</span></div>
+        ${stages[s].map(c => {
+          const alpha = 0.15 + 0.85 * (c.count / maxCnt);
+          return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <div style="flex:1;padding:5px 10px;border-radius:6px;font-size:12px;
+                        background:rgba(220,38,38,${alpha});color:${alpha > 0.5 ? '#fff' : '#7f1d1d'}">
+              ${c.cause}${c.avg_conf != null ? ` <b>·${(c.avg_conf * 100).toFixed(0)}%</b>` : ''}
+            </div>
+            <span style="font-size:11px;color:var(--muted)">×${c.count}</span>
+          </div>`;
+        }).join('')}
+      </div>`).join('')
+    : '<div style="font-size:12px;color:var(--muted)">暂无失败归因数据（评测并归因后自动生成）</div>';
+  // 建议
+  document.getElementById('report-advice').innerHTML = (rep.advice || []).length
+    ? rep.advice.map(a => `
+      <div style="padding:8px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;
+                  font-size:12px;background:#fffbeb">
+        💡 ${a.cause} <span style="color:var(--muted)">（rollout #${a.rollout_id} · ${a.created_at}）</span>
+      </div>`).join('')
+    : '<div style="font-size:12px;color:var(--muted)">暂无建议（对失败 rollout 运行 AI 归因后自动生成）</div>';
+}
+loadStats(); loadDatasets(); loadExperiments(); loadRollouts(); loadReport();
+</script>
+</body>
+</html>
