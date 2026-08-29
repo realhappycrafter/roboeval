@@ -1,0 +1,8 @@
+# API key 绝不能进仓库
+.env
+*.db
+__pycache__/
+node_modules/
+dist/
+assets/
+*.log
