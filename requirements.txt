@@ -6,3 +6,4 @@ httpx
 python-dotenv
 openai
 imageio-ffmpeg
+python-multipart
