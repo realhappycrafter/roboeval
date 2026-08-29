@@ -3,407 +3,1133 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="RoboEval - 面向 LeRobot 生态的具身智能策略评测与数据闭环平台">
+<meta name="color-scheme" content="light">
 <title>RoboEval · 具身智能策略评测平台</title>
 <style>
-  :root {
-    --bg: #f6f7f9; --card: #ffffff; --line: #e5e7eb;
-    --ink: #1f2937; --muted: #6b7280; --brand: #2563eb; --ok: #16a34a; --soft: #eff6ff;
-  }
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: "Microsoft YaHei", system-ui, sans-serif; background: var(--bg); color: var(--ink); }
-  header { background: var(--card); border-bottom: 1px solid var(--line); padding: 14px 28px;
-           display: flex; align-items: center; gap: 12px; }
-  header .logo { width: 30px; height: 30px; border-radius: 8px; background: var(--brand);
-                 color: #fff; display: grid; place-items: center; font-weight: 700; }
-  header h1 { font-size: 17px; }
-  header .sub { color: var(--muted); font-size: 12px; }
-  main { max-width: 1080px; margin: 24px auto; padding: 0 20px; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 22px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
-  .card .num { font-size: 26px; font-weight: 700; color: var(--brand); }
-  .card .label { font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-  .panel h2 { font-size: 14px; padding: 14px 18px; border-bottom: 1px solid var(--line); background: #fafbfc; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 10px 18px; border-bottom: 1px solid var(--line); }
-  th { color: var(--muted); font-weight: 600; background: #fafbfc; }
-  tr:hover td { background: var(--soft); cursor: pointer; }
-  .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
-         background: var(--soft); color: var(--brand); margin-right: 4px; }
-  .btn { padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--card);
-         font-size: 12px; cursor: pointer; }
-  .btn:hover { background: var(--soft); }
-  .foot { text-align: center; color: var(--muted); font-size: 12px; padding: 24px 0; }
-  .detail { display: none; margin-top: 16px; }
-  .detail.show { display: block; }
-  .badge { padding: 1px 6px; border-radius: 6px; font-size: 11px; background: #f3f4f6; }
+/* ============================================================
+   设计令牌（Design Tokens）
+   ============================================================ */
+:root {
+  /* 间距节奏 4px 基准 */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+
+  /* 字号与行高（rem 支持浏览器缩放，行高统一节奏） */
+  --fs-11: 0.6875rem;  --lh-11: 1.45;
+  --fs-12: 0.75rem;    --lh-12: 1.55;
+  --fs-13: 0.8125rem;  --lh-13: 1.6;
+  --fs-14: 0.875rem;   --lh-14: 1.5;
+  --fs-16: 1rem;       --lh-16: 1.5;
+  --fs-20: 1.25rem;    --lh-20: 1.3;
+  --fs-28: 1.75rem;    --lh-28: 1.15;
+
+  /* 圆角体系 */
+  --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-xl: 16px; --r-full: 999px;
+
+  /* 阴影层级 */
+  --sh-1: 0 1px 2px rgba(16,24,40,.04), 0 1px 3px rgba(16,24,40,.06);
+  --sh-2: 0 4px 12px rgba(16,24,40,.08), 0 1px 3px rgba(16,24,40,.05);
+  --sh-focus: 0 0 0 3px rgba(29,78,216,.28);
+
+  /* 表面与边框 */
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f9fafb;
+  --surface-3: #f3f4f6;
+  --line: #e5e7eb;
+  --line-strong: #d1d5db;
+
+  /* 文本（均已校验白底对比度 ≥ 4.5:1） */
+  --ink: #111827;      /* 16.9:1 主文本 */
+  --ink-2: #374151;    /* 10.3:1 次要文本 */
+  --muted: #4b5563;    /*  7.5:1 辅助文本 */
+
+  /* 语义色（文本级对比度达标） */
+  --brand: #1d4ed8;      /* 7.0:1 */
+  --brand-strong: #1e40af;
+  --brand-soft: #eff6ff;
+  --ok: #15803d;         /* 4.9:1 */
+  --ok-soft: #f0fdf4;
+  --warn: #b45309;       /* 4.9:1 */
+  --warn-soft: #fffbeb;
+  --danger: #b91c1c;     /* 6.4:1 */
+  --danger-soft: #fef2f2;
+
+  --dur: 140ms;
+  --ease: cubic-bezier(.2,.6,.3,1);
+}
+
+/* ============================================================
+   基础重置
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font-family: "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: var(--fs-13);
+  line-height: var(--lh-13);
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, p { margin: 0; }
+button, input, select { font: inherit; color: inherit; }
+
+/* 焦点可见性：键盘导航统一可见，鼠标点击不干扰 */
+:focus { outline: none; }
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0;
+  margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+.skip-link {
+  position: absolute; left: var(--sp-3); top: -60px; z-index: 20;
+  background: var(--brand); color: #fff; padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-md); text-decoration: none; font-size: var(--fs-12);
+  transition: top var(--dur) var(--ease);
+}
+.skip-link:focus { top: var(--sp-3); }
+
+/* ============================================================
+   布局
+   ============================================================ */
+.app-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  padding: var(--sp-4) var(--sp-5);
+  display: flex; align-items: center; gap: var(--sp-3);
+  position: sticky; top: 0; z-index: 10;
+}
+.app-header .logo {
+  width: 34px; height: 34px; border-radius: var(--r-md);
+  background: var(--brand); color: #fff;
+  display: grid; place-items: center;
+  font-weight: 700; font-size: var(--fs-16);
+  flex: none; box-shadow: var(--sh-1);
+}
+.app-header h1 { font-size: var(--fs-16); line-height: 1.3; font-weight: 700; }
+.app-header .sub { color: var(--muted); font-size: var(--fs-12); line-height: var(--lh-12); }
+
+main { max-width: 1120px; margin: 0 auto; padding: var(--sp-5) var(--sp-5) var(--sp-6); }
+.stack { display: flex; flex-direction: column; gap: var(--sp-5); }
+.foot {
+  text-align: center; color: var(--muted);
+  font-size: var(--fs-12); line-height: var(--lh-12);
+  padding-top: var(--sp-4);
+}
+
+/* ============================================================
+   统计卡片
+   ============================================================ */
+.cards {
+  display: grid; gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  padding: var(--sp-4);
+  box-shadow: var(--sh-1);
+  transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.card:hover { box-shadow: var(--sh-2); transform: translateY(-1px); }
+.card .num {
+  font-size: var(--fs-28); line-height: var(--lh-28);
+  font-weight: 700; color: var(--brand);
+  font-variant-numeric: tabular-nums;
+}
+.card .label {
+  font-size: var(--fs-12); line-height: var(--lh-12);
+  color: var(--muted); margin-top: var(--sp-1);
+}
+
+/* ============================================================
+   面板
+   ============================================================ */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-1);
+  overflow: hidden;
+}
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.panel-head h2 {
+  font-size: var(--fs-14); line-height: var(--lh-14);
+  font-weight: 600; color: var(--ink);
+}
+.panel-head .hint {
+  font-size: var(--fs-11); line-height: var(--lh-11);
+  color: var(--muted); font-weight: 400;
+}
+.panel-toolbar {
+  display: flex; align-items: flex-end; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-2);
+}
+.panel-body { padding: var(--sp-4); }
+.panel-body.is-split {
+  display: grid; gap: var(--sp-5);
+  grid-template-columns: minmax(240px, 1fr) minmax(280px, 2fr);
+}
+.panel .panel-body + .panel-body { padding-top: 0; }
+.block-title {
+  font-size: var(--fs-13); line-height: var(--lh-13);
+  font-weight: 600; margin-bottom: var(--sp-2);
+}
+
+/* ============================================================
+   表单控件
+   ============================================================ */
+.field { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+.field-label {
+  font-size: var(--fs-11); line-height: var(--lh-11);
+  color: var(--muted); font-weight: 500;
+}
+.input, .select, .file-input {
+  width: 100%; min-width: 0;
+  padding: 7px var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  font-size: var(--fs-12); line-height: var(--lh-12);
+  color: var(--ink);
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.input::placeholder { color: #6b7280; }
+.input:hover, .select:hover { border-color: #9ca3af; }
+.input:focus-visible, .select:focus-visible, .file-input:focus-visible {
+  border-color: var(--brand); box-shadow: var(--sh-focus); outline: none;
+}
+.input:disabled, .select:disabled {
+  background: var(--surface-3); color: var(--muted); cursor: not-allowed;
+}
+.file-input { padding: 5px var(--sp-2); }
+.file-input::file-selector-button {
+  margin-right: var(--sp-2); padding: 4px var(--sp-2);
+  border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+  background: var(--surface-2); font-size: var(--fs-11); cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+.file-input::file-selector-button:hover { background: var(--brand-soft); }
+
+/* ============================================================
+   按钮
+   ============================================================ */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1);
+  padding: 7px var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-size: var(--fs-12); line-height: var(--lh-12); font-weight: 500;
+  cursor: pointer; white-space: nowrap;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease),
+              color var(--dur) var(--ease), box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.btn:hover { background: var(--surface-3); border-color: #9ca3af; }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { border-color: var(--brand); box-shadow: var(--sh-focus); outline: none; }
+.btn:disabled, .btn[aria-disabled="true"] {
+  opacity: .55; cursor: not-allowed; transform: none;
+  background: var(--surface-3); border-color: var(--line);
+}
+.btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn-primary:hover { background: var(--brand-strong); border-color: var(--brand-strong); }
+.btn-primary:focus-visible { box-shadow: var(--sh-focus); }
+.btn-danger { color: var(--danger); border-color: #fca5a5; }
+.btn-danger:hover { background: var(--danger-soft); border-color: var(--danger); }
+.btn-sm { padding: 4px var(--sp-2); font-size: var(--fs-11); }
+
+/* 加载态：内置 spinner，禁用指针避免重复提交 */
+.btn.is-loading { pointer-events: none; opacity: .8; }
+.spinner {
+  width: 12px; height: 12px; flex: none;
+  border: 2px solid currentColor; border-right-color: transparent;
+  border-radius: var(--r-full);
+  animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   表格
+   ============================================================ */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.table { width: 100%; border-collapse: collapse; font-size: var(--fs-13); line-height: var(--lh-13); }
+.table th, .table td {
+  text-align: left; padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--line); vertical-align: middle;
+}
+.table thead th {
+  background: var(--surface-2);
+  color: var(--muted); font-weight: 600;
+  font-size: var(--fs-11); line-height: var(--lh-11);
+  letter-spacing: .02em; text-transform: none;
+  white-space: nowrap;
+}
+.table tbody tr:last-child td { border-bottom: 0; }
+.table tbody tr { transition: background var(--dur) var(--ease); }
+.table tbody tr.is-clickable { cursor: pointer; }
+.table tbody tr.is-clickable:hover { background: var(--brand-soft); }
+.table tbody tr.is-clickable:focus-visible {
+  outline: 2px solid var(--brand); outline-offset: -2px; background: var(--brand-soft);
+}
+.table td.num, .table th.num { font-variant-numeric: tabular-nums; }
+.cell-strong { font-weight: 600; }
+.cell-muted { color: var(--muted); font-size: var(--fs-12); line-height: var(--lh-12); }
+.cell-clip { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.col-actions { width: 1%; white-space: nowrap; text-align: right; }
+
+/* ============================================================
+   徽章 / 标签
+   ============================================================ */
+.badge {
+  display: inline-flex; align-items: center;
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-3); color: var(--ink-2);
+  font-size: var(--fs-11); line-height: 1.5; white-space: nowrap;
+}
+.tag {
+  display: inline-flex; align-items: center;
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-full);
+  background: var(--brand-soft); color: var(--brand);
+  font-size: var(--fs-11); line-height: 1.5; margin-right: var(--sp-1);
+}
+.result { font-weight: 600; white-space: nowrap; }
+.result-success { color: var(--ok); }
+.result-failure { color: var(--danger); }
+.result-unknown { color: var(--muted); }
+
+/* ============================================================
+   状态提示（hint / empty / error / skeleton）
+   ============================================================ */
+.hint {
+  font-size: var(--fs-12); line-height: var(--lh-12);
+  color: var(--muted); min-height: 18px;
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+}
+.hint.is-ok { color: var(--ok); }
+.hint.is-error { color: var(--danger); }
+.hint.is-busy { color: var(--brand); }
+
+.state { display: flex; flex-direction: column; align-items: center; gap: var(--sp-2);
+         padding: var(--sp-6) var(--sp-4); text-align: center; }
+.state .icon { font-size: 22px; line-height: 1; }
+.state .title { font-size: var(--fs-13); font-weight: 600; color: var(--ink-2); }
+.state .desc { font-size: var(--fs-12); line-height: var(--lh-12); color: var(--muted); max-width: 46ch; }
+.state-error .title { color: var(--danger); }
+
+.skeleton { height: 12px; border-radius: var(--r-sm);
+            background: linear-gradient(90deg, var(--surface-3) 25%, #e9ebef 37%, var(--surface-3) 63%);
+            background-size: 400% 100%; animation: shimmer 1.2s ease-in-out infinite; }
+@keyframes shimmer { 0% { background-position: 100% 50% } 100% { background-position: 0 50% } }
+
+/* ============================================================
+   报告区：进度条 / 热力 / 建议
+   ============================================================ */
+.rate-row { margin-bottom: var(--sp-3); }
+.rate-row:last-child { margin-bottom: 0; }
+.rate-meta {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  font-size: var(--fs-12); line-height: var(--lh-12); margin-bottom: var(--sp-1);
+}
+.rate-name { color: var(--ink-2); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rate-count { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bar {
+  height: 10px; border-radius: var(--r-full);
+  background: var(--surface-3); overflow: hidden;
+}
+.bar > span { display: block; height: 100%; border-radius: var(--r-full); transition: width .3s var(--ease); }
+.bar-ok > span { background: var(--ok); }
+.bar-warn > span { background: var(--warn); }
+.bar-idle > span { background: var(--line-strong); }
+.rate-value { font-size: var(--fs-11); line-height: var(--lh-11); margin-top: 3px; font-weight: 600; }
+
+.heat-group { margin-bottom: var(--sp-3); }
+.heat-group:last-child { margin-bottom: 0; }
+.heat-row { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-1); }
+.heat-bar {
+  flex: 1; min-width: 0;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-12); line-height: var(--lh-12);
+}
+.heat-count { font-size: var(--fs-11); color: var(--muted); font-variant-numeric: tabular-nums; }
+.advice {
+  display: flex; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid #fde68a; border-radius: var(--r-md);
+  background: var(--warn-soft);
+  font-size: var(--fs-12); line-height: var(--lh-12);
+  margin-bottom: var(--sp-2);
+}
+.advice:last-child { margin-bottom: 0; }
+.advice .meta { color: var(--muted); font-size: var(--fs-11); }
+
+/* ============================================================
+   播放器
+   ============================================================ */
+.player-layout { display: grid; gap: var(--sp-4); grid-template-columns: minmax(0, 640px) minmax(240px, 1fr); }
+.player-layout video {
+  width: 100%; height: auto; max-width: 640px;
+  border-radius: var(--r-md); background: #000; display: block;
+}
+.player-side { display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+.btn-group { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+.attr-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.attr-item {
+  display: flex; align-items: flex-start; gap: var(--sp-2);
+  font-size: var(--fs-12); line-height: var(--lh-12); color: var(--ink-2);
+}
+.attr-item .conf { color: var(--brand); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* ============================================================
+   折叠面板
+   ============================================================ */
+.detail { display: none; }
+.detail.show { display: block; }
+
+/* ============================================================
+   响应式
+   ============================================================ */
+@media (max-width: 860px) {
+  .panel-body.is-split { grid-template-columns: 1fr; gap: var(--sp-4); }
+  .player-layout { grid-template-columns: 1fr; }
+  .player-layout video { max-width: 100%; }
+}
+@media (max-width: 640px) {
+  .app-header { padding: var(--sp-3) var(--sp-4); position: static; }
+  main { padding: var(--sp-4) var(--sp-4) var(--sp-6); }
+  .stack { gap: var(--sp-4); }
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .card { padding: var(--sp-3); }
+  .card .num { font-size: var(--fs-20); }
+  .panel-head, .panel-toolbar, .panel-body { padding: var(--sp-3); }
+  .table th, .table td { padding: var(--sp-2) var(--sp-3); }
+  .toolbar-field { flex: 1 1 100%; }
+  .cell-clip { max-width: 140px; }
+}
+@media (max-width: 380px) {
+  .cards { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+}
 </style>
 </head>
 <body>
-<header>
-  <div class="logo">R</div>
+<a class="skip-link" href="#main">跳到主要内容</a>
+
+<header class="app-header" role="banner">
+  <div class="logo" aria-hidden="true">R</div>
   <div>
     <h1>RoboEval</h1>
-    <div class="sub">具身智能策略评测与数据闭环平台 · LeRobot 生态</div>
+    <p class="sub">具身智能策略评测与数据闭环平台 · LeRobot 生态</p>
   </div>
 </header>
-<main>
-  <div class="cards" id="cards"></div>
 
-  <div class="panel" style="margin-bottom: 22px;">
-    <h2>训练实验（来自 WSL 真实训练产物）</h2>
-    <table>
-      <thead><tr>
-        <th>实验</th><th>模型</th><th>训练步数</th><th>学习率</th><th>Batch</th><th>数据集</th><th>检查点</th><th>备注</th>
-      </tr></thead>
-      <tbody id="exp-body"><tr><td colspan="8">加载中…</td></tr></tbody>
-    </table>
-  </div>
+<main id="main">
+  <div class="stack">
+    <!-- 统计概览 -->
+    <section class="cards" id="cards" aria-label="全局统计概览"></section>
 
-  <div class="panel" style="margin-bottom: 22px;">
-    <h2>数据飞轮报告（评测聚合 → 归因热力 → 采集建议）</h2>
-    <div style="display:flex; gap:20px; padding:16px; flex-wrap:wrap;">
-      <div style="flex:1; min-width:260px;">
-        <div style="font-size:13px; font-weight:600; margin-bottom:10px;">各实验评测成功率</div>
-        <div id="report-rates">加载中…</div>
+    <!-- 训练实验 -->
+    <section class="panel" aria-labelledby="h-exp">
+      <div class="panel-head">
+        <h2 id="h-exp">训练实验</h2>
+        <span class="hint">来自真实训练产物（train_config.json 自动解析）</span>
       </div>
-      <div style="flex:2; min-width:320px;">
-        <div style="font-size:13px; font-weight:600; margin-bottom:10px;">失败阶段 × 原因热力（AI 归因聚合）</div>
-        <div id="report-heat">加载中…</div>
-      </div>
-    </div>
-    <div style="padding:0 16px 16px;">
-      <div style="font-size:13px; font-weight:600; margin-bottom:10px;">💡 AI 采集建议（反哺下一轮数据采集）</div>
-      <div id="report-advice">加载中…</div>
-    </div>
-  </div>
-
-  <div class="panel" style="margin-bottom: 22px;">
-    <h2>评测 Rollouts（点击行播放视频并标注）</h2>
-    <div style="padding:14px 18px; border-bottom:1px solid var(--line); display:flex; gap:10px;
-                align-items:flex-end; flex-wrap:wrap; background:#fafbfc;">
-      <div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">① 选择检查点</div>
-        <select id="ckpt-select" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px;
-                font-size:12px;min-width:220px;background:#fff"></select>
-      </div>
-      <div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">② 上传评测视频</div>
-        <input type="file" id="video-file" accept="video/*"
-               style="padding:4px;border:1px solid var(--line);border-radius:8px;font-size:12px;background:#fff">
-      </div>
-      <button class="btn" onclick="addRollout()" style="background:var(--brand);color:#fff">➕ 添加评测</button>
-      <button class="btn" onclick="autoImport()">📂 一键导入目录视频</button>
-      <span id="add-hint" style="font-size:12px;color:var(--muted)"></span>
-    </div>
-    <table>
-      <thead><tr>
-        <th>#</th><th>视频</th><th>实验</th><th>检查点</th><th>结果</th><th>归因条数</th><th>备注</th><th></th>
-      </tr></thead>
-      <tbody id="ro-body"><tr><td colspan="8">加载中…</td></tr></tbody>
-    </table>
-  </div>
-
-  <div class="panel detail" id="player-panel" style="margin-bottom: 22px;">
-    <h2 id="player-title">评测回放</h2>
-    <div style="display:flex; gap:18px; padding:16px; flex-wrap:wrap;">
-      <video id="player" controls style="flex:2; min-width:420px; max-width:640px; border-radius:8px; background:#000;"></video>
-      <div style="flex:1; min-width:240px;">
-        <div style="font-size:13px; font-weight:600; margin-bottom:8px;">结果标注</div>
-        <div style="display:flex; gap:8px; margin-bottom:16px;">
-          <button class="btn" onclick="markResult('success')">✅ 成功</button>
-          <button class="btn" onclick="markResult('failure')">❌ 失败</button>
-          <button class="btn" onclick="markResult('unknown')">⭕ 待定</button>
+      <div class="panel-toolbar">
+        <div class="field toolbar-field">
+          <label class="field-label" for="exp-path">导入训练产物目录</label>
+          <input class="input" id="exp-path" type="text"
+                 placeholder="train 根目录，或单个 job 目录">
         </div>
-        <div style="font-size:13px; font-weight:600; margin-bottom:8px;">AI 归因</div>
-        <button class="btn" id="btn-attr" onclick="runAttribution()" style="background:var(--brand); color:#fff;">🤖 运行 AI 归因</button>
-        <div id="attr-list" style="margin-top:12px; font-size:12px; color:var(--muted);">点击按钮开始（约 20-60 秒）</div>
+        <button class="btn btn-primary" type="button" id="btn-import-exp" onclick="importExperiments()">
+          <span class="btn-text">导入训练产物</span></button>
+        <span class="hint" id="exp-hint" role="status" aria-live="polite"></span>
       </div>
-    </div>
-  </div>
-
-  <div class="panel">
-    <h2>数据集一览（点击行查看 episodes）</h2>
-    <div style="padding:14px 18px; border-bottom:1px solid var(--line); display:flex; gap:10px;
-                align-items:flex-end; flex-wrap:wrap; background:#fafbfc;">
-      <div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">导入数据集目录</div>
-        <input id="ds-path" placeholder="单个数据集目录，或包含多个数据集的父目录"
-               style="padding:6px 10px;border:1px solid var(--line);border-radius:8px;
-                      font-size:12px;min-width:360px">
+      <div class="table-wrap">
+        <table class="table">
+          <caption class="sr-only">训练实验列表，包含模型、训练步数、学习率、批大小、数据集与检查点数量</caption>
+          <thead>
+            <tr>
+              <th scope="col">实验</th><th scope="col">模型</th>
+              <th scope="col" class="num">训练步数</th><th scope="col" class="num">学习率</th>
+              <th scope="col" class="num">Batch</th><th scope="col">数据集</th>
+              <th scope="col" class="num">检查点</th><th scope="col">备注</th>
+            </tr>
+          </thead>
+          <tbody id="exp-body"></tbody>
+        </table>
       </div>
-      <button class="btn" onclick="importDatasets()" style="background:var(--brand);color:#fff">
-        📥 导入数据集</button>
-      <button class="btn" onclick="rescanBuiltin()">🔄 重扫内置目录</button>
-      <span id="ds-hint" style="font-size:12px;color:var(--muted)"></span>
-    </div>
-    <table>
-      <thead><tr>
-        <th>数据集</th><th>机器人</th><th>Episodes</th><th>总帧数</th><th>FPS</th><th>相机</th><th>来源</th>
-      </tr></thead>
-      <tbody id="ds-body"><tr><td colspan="7">加载中…</td></tr></tbody>
-    </table>
+    </section>
+
+    <!-- 数据飞轮报告 -->
+    <section class="panel" aria-labelledby="h-report">
+      <div class="panel-head">
+        <h2 id="h-report">数据飞轮报告</h2>
+        <span class="hint">评测聚合 → 归因热力 → 采集建议</span>
+      </div>
+      <div class="panel-body is-split">
+        <div>
+          <h3 class="block-title">各实验评测成功率</h3>
+          <div id="report-rates"></div>
+        </div>
+        <div>
+          <h3 class="block-title">失败阶段 × 原因热力（AI 归因聚合）</h3>
+          <div id="report-heat"></div>
+        </div>
+      </div>
+      <div class="panel-body">
+        <h3 class="block-title">AI 采集建议（反哺下一轮数据采集）</h3>
+        <div id="report-advice"></div>
+      </div>
+    </section>
+
+    <!-- 评测 Rollouts -->
+    <section class="panel" aria-labelledby="h-ro">
+      <div class="panel-head">
+        <h2 id="h-ro">评测 Rollouts</h2>
+        <span class="hint">点击行播放视频并标注结果</span>
+      </div>
+      <div class="panel-toolbar">
+        <div class="field toolbar-field">
+          <label class="field-label" for="ckpt-select">① 选择检查点</label>
+          <select class="select" id="ckpt-select"></select>
+        </div>
+        <div class="field toolbar-field">
+          <label class="field-label" for="video-file">② 上传评测视频</label>
+          <input class="file-input" type="file" id="video-file" accept="video/*">
+        </div>
+        <button class="btn btn-primary" type="button" id="btn-add-ro" onclick="addRollout()">
+          <span class="btn-text">添加评测</span></button>
+        <button class="btn" type="button" id="btn-import-dir" onclick="autoImport()">
+          <span class="btn-text">一键导入目录视频</span></button>
+        <span class="hint" id="add-hint" role="status" aria-live="polite"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <caption class="sr-only">评测 Rollout 列表，可点击行播放视频并对结果进行标注</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="num">#</th><th scope="col">视频</th>
+              <th scope="col">实验</th><th scope="col" class="num">检查点</th>
+              <th scope="col">结果</th><th scope="col" class="num">归因条数</th>
+              <th scope="col">备注</th><th scope="col" class="col-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody id="ro-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 播放器 -->
+    <section class="panel detail" id="player-panel" aria-labelledby="player-title">
+      <div class="panel-head"><h2 id="player-title">评测回放</h2></div>
+      <div class="panel-body">
+        <div class="player-layout">
+          <video id="player" controls preload="metadata" aria-label="评测回放视频"></video>
+          <div class="player-side">
+            <div>
+              <h3 class="block-title">结果标注</h3>
+              <div class="btn-group">
+                <button class="btn" type="button" onclick="markResult('success')">成功</button>
+                <button class="btn" type="button" onclick="markResult('failure')">失败</button>
+                <button class="btn" type="button" onclick="markResult('unknown')">待定</button>
+              </div>
+            </div>
+            <div>
+              <h3 class="block-title">AI 归因</h3>
+              <button class="btn btn-primary" type="button" id="btn-attr" onclick="runAttribution()">
+                <span class="btn-text">运行 AI 归因</span></button>
+              <div class="attr-list" id="attr-list" style="margin-top:var(--sp-2)"
+                   role="status" aria-live="polite"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 数据集 -->
+    <section class="panel" aria-labelledby="h-ds">
+      <div class="panel-head">
+        <h2 id="h-ds">数据集一览</h2>
+        <span class="hint">点击行查看 episodes</span>
+      </div>
+      <div class="panel-toolbar">
+        <div class="field toolbar-field" style="flex:2 1 320px">
+          <label class="field-label" for="ds-path">导入数据集目录</label>
+          <input class="input" id="ds-path" type="text"
+                 placeholder="单个数据集目录，或包含多个数据集的父目录">
+        </div>
+        <button class="btn btn-primary" type="button" id="btn-import-ds" onclick="importDatasets()">
+          <span class="btn-text">导入数据集</span></button>
+        <button class="btn" type="button" id="btn-rescan" onclick="rescanBuiltin()">
+          <span class="btn-text">重扫内置目录</span></button>
+        <span class="hint" id="ds-hint" role="status" aria-live="polite"></span>
+      </div>
+      <div class="table-wrap">
+        <table class="table">
+          <caption class="sr-only">数据集列表，包含机器人类型、episode 数量、总帧数、帧率与相机配置</caption>
+          <thead>
+            <tr>
+              <th scope="col">数据集</th><th scope="col">机器人</th>
+              <th scope="col" class="num">Episodes</th><th scope="col" class="num">总帧数</th>
+              <th scope="col" class="num">FPS</th><th scope="col">相机</th><th scope="col">来源</th>
+            </tr>
+          </thead>
+          <tbody id="ds-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Episodes 明细 -->
+    <section class="panel detail" id="detail" aria-labelledby="detail-title">
+      <div class="panel-head"><h2 id="detail-title">Episodes</h2></div>
+      <div class="table-wrap">
+        <table class="table">
+          <caption class="sr-only">所选数据集的 episode 明细</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="num">#</th><th scope="col">Episode Index</th>
+              <th scope="col" class="num">帧数</th><th scope="col">任务</th>
+            </tr>
+          </thead>
+          <tbody id="ep-body"></tbody>
+        </table>
+      </div>
+    </section>
   </div>
 
-  <div class="panel detail" id="detail">
-    <h2 id="detail-title">Episodes</h2>
-    <table>
-      <thead><tr><th>#</th><th>Episode Index</th><th>帧数</th><th>任务</th></tr></thead>
-      <tbody id="ep-body"></tbody>
-    </table>
-  </div>
-
-  <div class="foot">RoboEval v0.1 · W1 里程碑：真实数据集血缘入库 · 数据不出本机</div>
+  <p class="foot">RoboEval v0.1 · 本地优先部署，机器人数据不出本机</p>
 </main>
+
 <script>
+/* ============================================================
+   工具函数
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => (n ?? 0).toLocaleString();
-async function loadStats() {
-  const s = await (await fetch('/api/stats')).json();
-  document.getElementById('cards').innerHTML = [
-    ['数据集', s.datasets], ['Episodes', s.episodes], ['总帧数', fmt(s.total_frames)],
-    ['训练实验', s.experiments], ['Checkpoint', s.checkpoints], ['评测 Rollout', s.rollouts]
-  ].map(([l, v]) => `<div class="card"><div class="num">${v}</div><div class="label">${l}</div></div>`).join('');
+const COLS = { exp: 8, ro: 8, ds: 7, ep: 4 };
+
+function setHint(el, msg, type) {
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'hint' + (type ? ' is-' + type : '');
 }
-async function importDatasets() {
-  const hint = document.getElementById('ds-hint');
-  const path = document.getElementById('ds-path').value.trim();
-  if (!path) return alert('请输入数据集目录路径');
-  hint.textContent = '扫描中…';
+/* 统一错误文案，避免 fetch 失败时页面静默 */
+async function api(url, options) {
+  let res;
   try {
-    const r = await fetch('/api/datasets/import', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path })
-    });
-    const d = await r.json();
-    hint.textContent = r.ok ? `✅ ${d.message}` : `❌ ${d.detail || d.message}`;
-    if (r.ok) { document.getElementById('ds-path').value = ''; loadDatasets(); loadStats(); }
-  } catch (e) { hint.textContent = '❌ ' + e.message; }
-}
-async function rescanBuiltin() {
-  const hint = document.getElementById('ds-hint');
-  hint.textContent = '重扫中…';
-  await fetch('/api/scan', { method: 'POST' });
-  hint.textContent = '✅ 内置目录已重扫';
-  loadDatasets(); loadStats();
-}
-async function importExperiments() {
-  const hint = document.getElementById('exp-hint');
-  const path = document.getElementById('exp-path').value.trim();
-  if (!path) return alert('请输入训练产物目录路径');
-  hint.textContent = '扫描中…';
-  try {
-    const r = await fetch('/api/experiments/import', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path })
-    });
-    const d = await r.json();
-    hint.textContent = r.ok ? `✅ ${d.message}` : `❌ ${d.detail || d.message}`;
-    if (r.ok) {
-      document.getElementById('exp-path').value = '';
-      loadExperiments(); loadStats(); loadCheckpoints();
-    }
-  } catch (e) { hint.textContent = '❌ ' + e.message; }
-}
-async function loadDatasets() {
-  const rows = await (await fetch('/api/datasets')).json();
-  document.getElementById('ds-body').innerHTML = rows.map(d => `
-    <tr onclick="showEpisodes(${d.id}, '${d.name}', ${d.total_episodes})">
-      <td><b>${d.name}</b></td>
-      <td><span class="badge">${d.robot_type || '-'}</span></td>
-      <td>${d.total_episodes}</td>
-      <td>${fmt(d.total_frames)}</td>
-      <td>${d.fps}</td>
-      <td>${(d.cameras || []).map(c => `<span class="tag">${c.replace('observation.images.', '')}</span>`).join('')}</td>
-      <td><span class="badge">${d.source}</span></td>
-    </tr>`).join('');
-}
-async function showEpisodes(id, name, total) {
-  const data = await (await fetch(`/api/datasets/${id}/episodes`)).json();
-  document.getElementById('detail').classList.add('show');
-  document.getElementById('detail-title').textContent = `${name} · ${data.episodes.length} 条 Episodes`;
-  document.getElementById('ep-body').innerHTML = data.episodes.map(e => `
-    <tr><td></td><td>episode_${String(e.episode_index).padStart(6, '0')}</td>
-    <td>${e.length ?? '-'}</td><td>${(e.task || '-').slice(0, 80)}</td></tr>`).join('');
-  document.getElementById('detail').scrollIntoView({ behavior: 'smooth' });
-}
-async function loadExperiments() {
-  const rows = await (await fetch('/api/experiments')).json();
-  document.getElementById('exp-body').innerHTML = rows.map(e => {
-    const hp = e.hyperparams || {};
-    return `<tr>
-      <td><b>${e.name}</b></td>
-      <td><span class="badge">${e.model}</span></td>
-      <td>${hp.steps ?? '-'}</td>
-      <td>${hp.lr ?? '-'}</td>
-      <td>${hp.batch_size ?? '-'}</td>
-      <td>${e.dataset_names || '-'}</td>
-      <td>${e.ckpt_count}</td>
-      <td style="max-width:260px;font-size:12px;color:var(--muted)">${e.notes || ''}</td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="8">暂无实验记录</td></tr>';
-}
-const RESULT_BADGE = { success: ['✅ 成功', 'var(--ok)'], failure: ['❌ 失败', '#dc2626'], unknown: ['⭕ 待定', 'var(--muted)'] };
-let currentRollout = null;
-async function loadRollouts() {
-  const rows = await (await fetch('/api/rollouts')).json();
-  document.getElementById('ro-body').innerHTML = rows.map(r => {
-    const [label, color] = RESULT_BADGE[r.result] || RESULT_BADGE.unknown;
-    const fname = (r.video_path || '').split('/').pop();
-    return `<tr onclick="playRollout(${r.id}, '${r.video_path}', '${r.experiment_name || '-'}', '${r.ckpt_step ?? '-'}')">
-      <td>${r.id}</td><td><b>${fname}</b></td>
-      <td>${r.experiment_name || '-'}</td>
-      <td>${r.ckpt_step ?? '-'}</td>
-      <td><span style="color:${color};font-weight:600">${label}</span></td>
-      <td>${r.annotation_count}</td>
-      <td style="max-width:220px;font-size:12px;color:var(--muted)">${r.notes || ''}</td>
-      <td><button class="btn" onclick="event.stopPropagation(); delRollout(${r.id})"
-                  style="color:#dc2626">删除</button></td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="7">暂无 rollout，运行 seed_rollouts.py 登记</td></tr>';
-}
-function playRollout(id, videoPath, expName, ckptStep) {
-  currentRollout = id;
-  document.getElementById('player-panel').classList.add('show');
-  document.getElementById('player-title').textContent = `评测回放 · Rollout #${id} · ${expName}@${ckptStep}`;
-  document.getElementById('player').src = `/api/media/${videoPath}`;
-  refreshAnnotations();
-  document.getElementById('player-panel').scrollIntoView({ behavior: 'smooth' });
-}
-async function markResult(result) {
-  if (currentRollout == null) return alert('请先点击上方 rollout 行');
-  await fetch(`/api/rollouts/${currentRollout}/result`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ result })
-  });
-  loadRollouts(); loadStats(); loadReport();
-}
-async function runAttribution() {
-  if (currentRollout == null) return alert('请先点击上方 rollout 行');
-  const box = document.getElementById('attr-list');
-  box.innerHTML = '<span style="color:var(--brand)">🤖 AI 归因中：抽帧 + qwen-vl-max 推理，约需 20-60 秒…</span>';
-  try {
-    const r = await fetch(`/api/rollouts/${currentRollout}/attribute`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
-    });
-    if (!r.ok) throw new Error((await r.json()).detail || r.status);
-    await refreshAnnotations();
-    loadRollouts(); loadStats();
+    res = await fetch(url, options);
   } catch (e) {
-    box.innerHTML = `<span style="color:#dc2626">归因失败: ${e.message}</span>`;
+    throw new Error('服务不可用，请确认后端已启动（start.bat）');
+  }
+  return res;
+}
+/* 按钮加载态 + 防重复提交 */
+function withLoading(btn, busyText) {
+  const textEl = btn.querySelector('.btn-text');
+  const original = textEl ? textEl.textContent : '';
+  const spinner = document.createElement('span');
+  spinner.className = 'spinner';
+  spinner.setAttribute('aria-hidden', 'true');
+  btn.classList.add('is-loading');
+  btn.disabled = true;
+  if (textEl && busyText) textEl.textContent = busyText;
+  btn.prepend(spinner);
+  return () => {
+    btn.classList.remove('is-loading');
+    btn.disabled = false;
+    if (spinner.parentNode) spinner.remove();
+    if (textEl) textEl.textContent = original;
+  };
+}
+/* 空态 / 错误态 / 加载态渲染 */
+function stateRow(colspan, kind, title, desc) {
+  const icon = { empty: '📭', error: '⚠️', loading: '⏳' }[kind] || '📭';
+  return `<tr><td colspan="${colspan}"><div class="state ${kind === 'error' ? 'state-error' : ''}">
+    <div class="icon" aria-hidden="true">${icon}</div>
+    <div class="title">${esc(title)}</div>
+    ${desc ? `<div class="desc">${esc(desc)}</div>` : ''}
+  </div></td></tr>`;
+}
+const loadingRow = (colspan, text = '加载中') =>
+  stateRow(colspan, 'loading', text + '…');
+const errorRow = (colspan, msg) =>
+  stateRow(colspan, 'error', '加载失败', msg);
+const emptyRow = (colspan, title, desc) => stateRow(colspan, 'empty', title, desc);
+
+/* ============================================================
+   统计概览
+   ============================================================ */
+async function loadStats() {
+  const box = $('cards');
+  try {
+    const res = await api('/api/stats');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const s = await res.json();
+    box.innerHTML = [
+      ['数据集', s.datasets], ['Episodes', s.episodes], ['总帧数', fmt(s.total_frames)],
+      ['训练实验', s.experiments], ['Checkpoint', s.checkpoints], ['评测 Rollout', s.rollouts]
+    ].map(([l, v]) => `<div class="card"><div class="num">${v}</div><div class="label">${l}</div></div>`).join('');
+  } catch (e) {
+    box.innerHTML = `<div class="card" style="grid-column:1/-1">
+      <div class="state state-error" style="padding:var(--sp-4)">
+        <div class="icon" aria-hidden="true">⚠️</div>
+        <div class="title">统计数据加载失败</div><div class="desc">${esc(e.message)}</div>
+      </div></div>`;
   }
 }
-async function refreshAnnotations() {
-  const list = await (await fetch(`/api/rollouts/${currentRollout}/annotations`)).json();
-  const box = document.getElementById('attr-list');
-  box.innerHTML = list.length
-    ? list.map(a => {
-        const conf = a.confidence != null ? ` <b style="color:var(--brand)">${(a.confidence * 100).toFixed(0)}%</b>` : '';
-        const icon = a.stage === '建议' ? '💡' : a.stage === '总结' ? '📋' : a.source === 'ai' ? '🤖' : '👤';
-        const stageTag = ['建议', '总结'].includes(a.stage) ? '' : `<span class="tag">${a.stage || '-'}</span>`;
-        return `<div style="margin-bottom:6px">${icon} ${stageTag}${a.cause || ''}${conf}</div>`;
-      }).join('')
-    : '暂无归因记录';
+
+/* ============================================================
+   数据集
+   ============================================================ */
+async function loadDatasets() {
+  const body = $('ds-body');
+  body.innerHTML = loadingRow(COLS.ds);
+  try {
+    const res = await api('/api/datasets');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    body.innerHTML = rows.length ? rows.map(d => `
+      <tr class="is-clickable" tabindex="0" role="button"
+          data-action="episodes" data-id="${d.id}" data-name="${esc(d.name)}"
+          aria-label="查看数据集 ${esc(d.name)} 的 episodes">
+        <td class="cell-strong">${esc(d.name)}</td>
+        <td><span class="badge">${esc(d.robot_type || '-')}</span></td>
+        <td class="num">${d.total_episodes}</td>
+        <td class="num">${fmt(d.total_frames)}</td>
+        <td class="num">${d.fps}</td>
+        <td>${(d.cameras || []).map(c => `<span class="tag">${esc(c.replace('observation.images.', ''))}</span>`).join('') || '-'}</td>
+        <td><span class="badge">${esc(d.source)}</span></td>
+      </tr>`).join('')
+      : emptyRow(COLS.ds, '暂无数据集', '在上方输入目录路径导入，或点击「重扫内置目录」');
+  } catch (e) {
+    body.innerHTML = errorRow(COLS.ds, e.message);
+  }
 }
-async function loadReport() {
-  const rep = await (await fetch('/api/report')).json();
-  // 成功率
-  document.getElementById('report-rates').innerHTML = rep.per_experiment.map(e => {
-    const judged = e.success + e.failure;
-    const rate = judged ? Math.round(e.success / judged * 100) : null;
-    return `<div style="margin-bottom:12px">
-      <div style="font-size:12px;color:var(--muted);display:flex;justify-content:space-between">
-        <span>${e.name} <span class="badge">${e.model}</span></span>
-        <span>${judged ? `✅${e.success} ❌${e.failure} ⭕${e.unknown}` : '暂无评测'}</span>
-      </div>
-      <div style="background:#f3f4f6;border-radius:6px;height:14px;margin-top:4px;overflow:hidden">
-        <div style="width:${rate ?? 0}%;height:100%;background:${rate >= 60 ? 'var(--ok)' : rate == null ? '#d1d5db' : '#f59e0b'}"></div>
-      </div>
-      ${judged ? `<div style="font-size:12px;margin-top:2px;color:${rate >= 60 ? 'var(--ok)' : '#b45309'};font-weight:600">成功率 ${rate}%（${e.success}/${judged} 已判定）</div>` : ''}
-    </div>`;
-  }).join('') || '<div style="font-size:12px;color:var(--muted)">暂无实验评测数据</div>';
-  // 失败热力
-  const stages = rep.failure_stages || {};
-  const stageNames = Object.keys(stages);
-  let maxCnt = 1;
-  stageNames.forEach(s => stages[s].forEach(c => maxCnt = Math.max(maxCnt, c.count)));
-  document.getElementById('report-heat').innerHTML = stageNames.length
-    ? stageNames.map(s => `
-      <div style="margin-bottom:10px">
-        <div style="font-size:12px;font-weight:600;margin-bottom:4px"><span class="tag">${s}</span></div>
-        ${stages[s].map(c => {
-          const alpha = 0.15 + 0.85 * (c.count / maxCnt);
-          return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-            <div style="flex:1;padding:5px 10px;border-radius:6px;font-size:12px;
-                        background:rgba(220,38,38,${alpha});color:${alpha > 0.5 ? '#fff' : '#7f1d1d'}">
-              ${c.cause}${c.avg_conf != null ? ` <b>·${(c.avg_conf * 100).toFixed(0)}%</b>` : ''}
-            </div>
-            <span style="font-size:11px;color:var(--muted)">×${c.count}</span>
-          </div>`;
-        }).join('')}
-      </div>`).join('')
-    : '<div style="font-size:12px;color:var(--muted)">暂无失败归因数据（评测并归因后自动生成）</div>';
-  // 建议
-  document.getElementById('report-advice').innerHTML = (rep.advice || []).length
-    ? rep.advice.map(a => `
-      <div style="padding:8px 12px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;
-                  font-size:12px;background:#fffbeb">
-        💡 ${a.cause} <span style="color:var(--muted)">（rollout #${a.rollout_id} · ${a.created_at}）</span>
-      </div>`).join('')
-    : '<div style="font-size:12px;color:var(--muted)">暂无建议（对失败 rollout 运行 AI 归因后自动生成）</div>';
+
+async function showEpisodes(id, name) {
+  const panel = $('detail'), body = $('ep-body');
+  panel.classList.add('show');
+  $('detail-title').textContent = `${name} · Episodes`;
+  body.innerHTML = loadingRow(COLS.ep);
+  try {
+    const res = await api(`/api/datasets/${id}/episodes`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    $('detail-title').textContent = `${name} · ${data.episodes.length} 条 Episodes`;
+    body.innerHTML = data.episodes.length ? data.episodes.map((e, i) => `
+      <tr>
+        <td class="num cell-muted">${i + 1}</td>
+        <td>episode_${String(e.episode_index).padStart(6, '0')}</td>
+        <td class="num">${e.length ?? '-'}</td>
+        <td class="cell-muted">${esc((e.task || '-').slice(0, 80))}</td>
+      </tr>`).join('')
+      : emptyRow(COLS.ep, '该数据集暂无 episodes');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) {
+    body.innerHTML = errorRow(COLS.ep, e.message);
+  }
 }
+
+async function importDatasets() {
+  const hint = $('ds-hint'), pathEl = $('ds-path'), path = pathEl.value.trim();
+  if (!path) { setHint(hint, '请输入数据集目录路径', 'error'); pathEl.focus(); return; }
+  const done = withLoading($('btn-import-ds'), '导入中');
+  setHint(hint, '扫描目录中…', 'busy');
+  try {
+    const res = await api('/api/datasets/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || d.message || '导入失败');
+    setHint(hint, d.message, 'ok');
+    pathEl.value = '';
+    loadDatasets(); loadStats();
+  } catch (e) {
+    setHint(hint, e.message, 'error');
+  } finally { done(); }
+}
+
+async function rescanBuiltin() {
+  const hint = $('ds-hint');
+  const done = withLoading($('btn-rescan'), '重扫中');
+  setHint(hint, '重扫内置目录中…', 'busy');
+  try {
+    const res = await api('/api/scan', { method: 'POST' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    setHint(hint, '内置目录已重扫', 'ok');
+    loadDatasets(); loadStats();
+  } catch (e) {
+    setHint(hint, e.message, 'error');
+  } finally { done(); }
+}
+
+/* ============================================================
+   训练实验
+   ============================================================ */
+async function loadExperiments() {
+  const body = $('exp-body');
+  body.innerHTML = loadingRow(COLS.exp);
+  try {
+    const res = await api('/api/experiments');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    body.innerHTML = rows.length ? rows.map(e => {
+      const hp = e.hyperparams || {};
+      return `<tr>
+        <td class="cell-strong">${esc(e.name)}</td>
+        <td><span class="badge">${esc(e.model)}</span></td>
+        <td class="num">${hp.steps ?? '-'}</td>
+        <td class="num">${hp.lr ?? '-'}</td>
+        <td class="num">${hp.batch_size ?? '-'}</td>
+        <td class="cell-clip">${esc(e.dataset_names || '-')}</td>
+        <td class="num">${e.ckpt_count}</td>
+        <td class="cell-muted cell-clip" title="${esc(e.notes || '')}">${esc(e.notes || '-')}</td>
+      </tr>`;
+    }).join('')
+      : emptyRow(COLS.exp, '暂无实验记录', '导入训练产物目录后自动解析超参与检查点');
+  } catch (e) {
+    body.innerHTML = errorRow(COLS.exp, e.message);
+  }
+}
+
+async function importExperiments() {
+  const hint = $('exp-hint'), pathEl = $('exp-path'), path = pathEl.value.trim();
+  if (!path) { setHint(hint, '请输入训练产物目录路径', 'error'); pathEl.focus(); return; }
+  const done = withLoading($('btn-import-exp'), '导入中');
+  setHint(hint, '扫描目录中…', 'busy');
+  try {
+    const res = await api('/api/experiments/import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || d.message || '导入失败');
+    setHint(hint, d.message, 'ok');
+    pathEl.value = '';
+    loadExperiments(); loadStats(); loadCheckpoints();
+  } catch (e) {
+    setHint(hint, e.message, 'error');
+  } finally { done(); }
+}
+
 async function loadCheckpoints() {
-  const rows = await (await fetch('/api/checkpoints')).json();
-  document.getElementById('ckpt-select').innerHTML = rows.map(c =>
-    `<option value="${c.id}">${c.experiment_name} @ ${c.step ?? 'last'}</option>`
-  ).join('') || '<option value="">（无检查点）</option>';
+  const sel = $('ckpt-select');
+  try {
+    const res = await api('/api/checkpoints');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    sel.innerHTML = rows.length
+      ? rows.map(c => `<option value="${c.id}">${esc(c.experiment_name)} @ ${c.step ?? 'last'}</option>`).join('')
+      : '<option value="">（暂无检查点，请先导入训练产物）</option>';
+    sel.disabled = !rows.length;
+  } catch (e) {
+    sel.innerHTML = '<option value="">（加载失败）</option>';
+    sel.disabled = true;
+  }
 }
+
+/* ============================================================
+   评测 Rollouts
+   ============================================================ */
+const RESULT_META = {
+  success: ['成功', 'result-success'],
+  failure: ['失败', 'result-failure'],
+  unknown: ['待定', 'result-unknown']
+};
+let currentRollout = null;
+
+async function loadRollouts() {
+  const body = $('ro-body');
+  body.innerHTML = loadingRow(COLS.ro);
+  try {
+    const res = await api('/api/rollouts');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rows = await res.json();
+    body.innerHTML = rows.length ? rows.map(r => {
+      const [label, cls] = RESULT_META[r.result] || RESULT_META.unknown;
+      const fname = (r.video_path || '').split('/').pop();
+      return `<tr class="is-clickable" tabindex="0" role="button"
+                data-action="play" data-id="${r.id}" data-video="${esc(r.video_path)}"
+                data-exp="${esc(r.experiment_name || '-')}" data-ckpt="${esc(r.ckpt_step ?? '-')}"
+                aria-label="播放 Rollout ${r.id}：${esc(fname)}">
+        <td class="num">${r.id}</td>
+        <td class="cell-strong cell-clip" title="${esc(fname)}">${esc(fname)}</td>
+        <td class="cell-clip">${esc(r.experiment_name || '-')}</td>
+        <td class="num">${esc(r.ckpt_step ?? '-')}</td>
+        <td><span class="result ${cls}">${label}</span></td>
+        <td class="num">${r.annotation_count}</td>
+        <td class="cell-muted cell-clip" title="${esc(r.notes || '')}">${esc(r.notes || '-')}</td>
+        <td class="col-actions">
+          <button class="btn btn-danger btn-sm" type="button"
+                  onclick="event.stopPropagation(); delRollout(${r.id})"
+                  aria-label="删除 Rollout ${r.id}">删除</button>
+        </td>
+      </tr>`;
+    }).join('')
+      : emptyRow(COLS.ro, '暂无评测 Rollout', '上传视频添加，或点击「一键导入目录视频」批量登记');
+  } catch (e) {
+    body.innerHTML = errorRow(COLS.ro, e.message);
+  }
+}
+
+/* 事件委托：同时支持鼠标点击与键盘 Enter/Space */
+function bindRowActions(tbodyId) {
+  const tbody = $(tbodyId);
+  tbody.addEventListener('click', e => {
+    const tr = e.target.closest('tr[data-action]');
+    if (!tr) return;
+    if (tr.dataset.action === 'play') {
+      playRollout(Number(tr.dataset.id), tr.dataset.video, tr.dataset.exp, tr.dataset.ckpt);
+    } else if (tr.dataset.action === 'episodes') {
+      showEpisodes(Number(tr.dataset.id), tr.dataset.name);
+    }
+  });
+  tbody.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const tr = e.target.closest('tr[data-action]');
+    if (!tr || e.target.closest('button')) return;
+    e.preventDefault();
+    tr.click();
+  });
+}
+
+function playRollout(id, videoPath, expName, ckptStep) {
+  currentRollout = id;
+  $('player-panel').classList.add('show');
+  $('player-title').textContent = `评测回放 · Rollout #${id} · ${expName}@${ckptStep}`;
+  $('player').src = `/api/media/${videoPath}`;
+  refreshAnnotations();
+  $('player-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function markResult(result) {
+  if (currentRollout == null) { setHint($('add-hint'), '请先点击上方 Rollout 行再标注', 'error'); return; }
+  try {
+    const res = await api(`/api/rollouts/${currentRollout}/result`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ result })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    loadRollouts(); loadStats(); loadReport();
+  } catch (e) {
+    setHint($('add-hint'), e.message, 'error');
+  }
+}
+
+async function runAttribution() {
+  if (currentRollout == null) { setHint($('add-hint'), '请先点击上方 Rollout 行再归因', 'error'); return; }
+  const btn = $('btn-attr'), box = $('attr-list');
+  const done = withLoading(btn, '归因中');
+  box.innerHTML = `<div class="attr-item"><span class="spinner" aria-hidden="true"></span>
+    正在抽帧并调用 qwen-vl-max 推理，约需 20-60 秒…</div>`;
+  try {
+    const res = await api(`/api/rollouts/${currentRollout}/attribute`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.detail || ('HTTP ' + res.status));
+    }
+    await refreshAnnotations();
+    loadRollouts(); loadStats(); loadReport();
+  } catch (e) {
+    box.innerHTML = `<div class="state state-error" style="padding:var(--sp-3)">
+      <div class="icon" aria-hidden="true">⚠️</div>
+      <div class="title">归因失败</div><div class="desc">${esc(e.message)}</div></div>`;
+  } finally { done(); }
+}
+
+async function refreshAnnotations() {
+  const box = $('attr-list');
+  if (currentRollout == null) { box.innerHTML = ''; return; }
+  try {
+    const res = await api(`/api/rollouts/${currentRollout}/annotations`);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const list = await res.json();
+    box.innerHTML = list.length
+      ? list.map(a => {
+          const icon = a.stage === '建议' ? '💡' : a.stage === '总结' ? '📋' : a.source === 'ai' ? '🤖' : '👤';
+          const tag = ['建议', '总结'].includes(a.stage)
+            ? `<span class="badge">${esc(a.stage)}</span>`
+            : `<span class="tag">${esc(a.stage || '-')}</span>`;
+          const conf = a.confidence != null
+            ? ` <span class="conf">${(a.confidence * 100).toFixed(0)}%</span>` : '';
+          return `<div class="attr-item"><span aria-hidden="true">${icon}</span>
+            <span>${tag} ${esc(a.cause || '')}${conf}</span></div>`;
+        }).join('')
+      : '<div class="attr-item cell-muted">暂无归因记录，点击「运行 AI 归因」生成</div>';
+  } catch (e) {
+    box.innerHTML = `<div class="attr-item result-failure">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
 async function addRollout() {
-  const hint = document.getElementById('add-hint');
-  const ckptId = document.getElementById('ckpt-select').value;
-  const fileEl = document.getElementById('video-file');
-  if (!ckptId) return alert('请先选择检查点');
-  if (!fileEl.files.length) return alert('请先选择要上传的视频文件');
-  hint.textContent = '上传中…';
+  const hint = $('add-hint'),
+        ckptId = $('ckpt-select').value,
+        fileEl = $('video-file');
+  if (!ckptId) { setHint(hint, '请先选择检查点', 'error'); $('ckpt-select').focus(); return; }
+  if (!fileEl.files.length) { setHint(hint, '请先选择要上传的视频文件', 'error'); fileEl.focus(); return; }
+  const done = withLoading($('btn-add-ro'), '上传中');
+  setHint(hint, '上传中…', 'busy');
   try {
     const fd = new FormData();
     fd.append('file', fileEl.files[0]);
-    const up = await fetch('/api/upload', { method: 'POST', body: fd });
-    if (!up.ok) throw new Error('上传失败 ' + up.status);
+    const up = await api('/api/upload', { method: 'POST', body: fd });
+    if (!up.ok) throw new Error('上传失败 HTTP ' + up.status);
     const { path } = await up.json();
-    const r = await fetch('/api/rollouts', {
+    const res = await api('/api/rollouts', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ checkpoint_id: Number(ckptId), video_path: path, result: 'unknown' })
     });
-    if (!r.ok) throw new Error('登记失败 ' + r.status);
-    hint.textContent = `✅ 已添加：${path.split('/').pop()}`;
+    if (!res.ok) throw new Error('登记失败 HTTP ' + res.status);
+    setHint(hint, `已添加：${path.split('/').pop()}`, 'ok');
     fileEl.value = '';
     loadRollouts(); loadStats(); loadReport();
   } catch (e) {
-    hint.textContent = '❌ ' + e.message;
-  }
+    setHint(hint, e.message, 'error');
+  } finally { done(); }
 }
+
+async function autoImport() {
+  const hint = $('add-hint'), ckptId = $('ckpt-select').value;
+  const done = withLoading($('btn-import-dir'), '扫描中');
+  setHint(hint, '扫描目录中…', 'busy');
+  try {
+    const res = await api('/api/rollouts/auto-import', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checkpoint_id: ckptId ? Number(ckptId) : null })
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || d.message || '导入失败');
+    setHint(hint, `新增 ${d.created} 条，跳过已存在 ${d.skipped} 条`, 'ok');
+    loadRollouts(); loadStats(); loadReport();
+  } catch (e) {
+    setHint(hint, e.message, 'error');
+  } finally { done(); }
+}
+
 async function delRollout(id) {
   if (!confirm(`确定删除 Rollout #${id} 吗？（视频文件会保留在磁盘上）`)) return;
-  await fetch(`/api/rollouts/${id}`, { method: 'DELETE' });
-  if (currentRollout === id) {
-    currentRollout = null;
-    document.getElementById('player-panel').classList.remove('show');
-    document.getElementById('player').src = '';
+  try {
+    const res = await api(`/api/rollouts/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (currentRollout === id) {
+      currentRollout = null;
+      $('player-panel').classList.remove('show');
+      $('player').src = '';
+      $('attr-list').innerHTML = '';
+    }
+    loadRollouts(); loadStats(); loadReport();
+  } catch (e) {
+    setHint($('add-hint'), e.message, 'error');
   }
-  loadRollouts(); loadStats(); loadReport();
 }
-async function autoImport() {
-  const hint = document.getElementById('add-hint');
-  const ckptId = document.getElementById('ckpt-select').value;
-  hint.textContent = '扫描目录中…';
-  const r = await fetch('/api/rollouts/auto-import', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ checkpoint_id: ckptId ? Number(ckptId) : null })
-  });
-  const d = await r.json();
-  hint.textContent = `✅ 新增 ${d.created} 条，跳过已存在 ${d.skipped} 条`;
-  loadRollouts(); loadStats(); loadReport();
+
+/* ============================================================
+   数据飞轮报告
+   ============================================================ */
+async function loadReport() {
+  const rates = $('report-rates'), heat = $('report-heat'), advice = $('report-advice');
+  rates.innerHTML = '<div class="skeleton" style="width:70%"></div>';
+  heat.innerHTML = '<div class="skeleton" style="width:85%"></div>';
+  advice.innerHTML = '<div class="skeleton" style="width:60%"></div>';
+  try {
+    const res = await api('/api/report');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const rep = await res.json();
+
+    /* 成功率 */
+    rates.innerHTML = (rep.per_experiment || []).length
+      ? rep.per_experiment.map(e => {
+          const judged = e.success + e.failure;
+          const rate = judged ? Math.round(e.success / judged * 100) : null;
+          const barCls = rate == null ? 'bar-idle' : rate >= 60 ? 'bar-ok' : 'bar-warn';
+          const valColor = rate == null ? 'var(--muted)' : rate >= 60 ? 'var(--ok)' : 'var(--warn)';
+          return `<div class="rate-row">
+            <div class="rate-meta">
+              <span class="rate-name" title="${esc(e.name)}">${esc(e.name)}
+                <span class="badge">${esc(e.model)}</span></span>
+              <span class="rate-count">${judged ? `成功 ${e.success} · 失败 ${e.failure} · 待定 ${e.unknown}` : '暂无评测'}</span>
+            </div>
+            <div class="bar ${barCls}" role="img"
+                 aria-label="${judged ? `成功率 ${rate}%` : '暂无评测数据'}">
+              <span style="width:${rate ?? 0}%"></span>
+            </div>
+            ${judged ? `<div class="rate-value" style="color:${valColor}">成功率 ${rate}%（${e.success}/${judged} 已判定）</div>` : ''}
+          </div>`;
+        }).join('')
+      : '<div class="state" style="padding:var(--sp-4)"><div class="icon" aria-hidden="true">📭</div><div class="desc">暂无实验评测数据</div></div>';
+
+    /* 失败热力 */
+    const stages = rep.failure_stages || {};
+    const stageNames = Object.keys(stages);
+    let maxCnt = 1;
+    stageNames.forEach(s => stages[s].forEach(c => { maxCnt = Math.max(maxCnt, c.count); }));
+    heat.innerHTML = stageNames.length
+      ? stageNames.map(s => `
+        <div class="heat-group">
+          <div style="margin-bottom:var(--sp-1)"><span class="tag">${esc(s)}</span></div>
+          ${stages[s].map(c => {
+            const alpha = 0.15 + 0.85 * (c.count / maxCnt);
+            const fg = alpha > 0.45 ? '#fff' : '#7f1d1d';
+            return `<div class="heat-row">
+              <div class="heat-bar" style="background:rgba(185,28,28,${alpha.toFixed(2)});color:${fg}">
+                ${esc(c.cause)}${c.avg_conf != null ? ` · ${(c.avg_conf * 100).toFixed(0)}%` : ''}
+              </div>
+              <span class="heat-count">×${c.count}</span>
+            </div>`;
+          }).join('')}
+        </div>`).join('')
+      : '<div class="state" style="padding:var(--sp-4)"><div class="icon" aria-hidden="true">📭</div><div class="desc">暂无失败归因数据，对失败 rollout 运行 AI 归因后自动生成</div></div>';
+
+    /* 采集建议 */
+    advice.innerHTML = (rep.advice || []).length
+      ? rep.advice.map(a => `
+        <div class="advice">
+          <span aria-hidden="true">💡</span>
+          <span>${esc(a.cause)}
+            <span class="meta">（rollout #${a.rollout_id} · ${esc(a.created_at)}）</span>
+          </span>
+        </div>`).join('')
+      : '<div class="state" style="padding:var(--sp-4)"><div class="icon" aria-hidden="true">📭</div><div class="desc">暂无建议，对失败 rollout 运行 AI 归因后自动生成</div></div>';
+  } catch (e) {
+    const err = `<div class="state state-error" style="padding:var(--sp-4)">
+      <div class="icon" aria-hidden="true">⚠️</div>
+      <div class="title">报告加载失败</div><div class="desc">${esc(e.message)}</div></div>`;
+    rates.innerHTML = err; heat.innerHTML = ''; advice.innerHTML = '';
+  }
 }
+
+/* ============================================================
+   初始化
+   ============================================================ */
+bindRowActions('ds-body');
+bindRowActions('ro-body');
 loadStats(); loadDatasets(); loadExperiments(); loadRollouts(); loadReport(); loadCheckpoints();
 </script>
 </body>
