@@ -80,11 +80,27 @@
 
   <div class="panel" style="margin-bottom: 22px;">
     <h2>评测 Rollouts（点击行播放视频并标注）</h2>
+    <div style="padding:14px 18px; border-bottom:1px solid var(--line); display:flex; gap:10px;
+                align-items:flex-end; flex-wrap:wrap; background:#fafbfc;">
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">① 选择检查点</div>
+        <select id="ckpt-select" style="padding:6px 10px;border:1px solid var(--line);border-radius:8px;
+                font-size:12px;min-width:220px;background:#fff"></select>
+      </div>
+      <div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">② 上传评测视频</div>
+        <input type="file" id="video-file" accept="video/*"
+               style="padding:4px;border:1px solid var(--line);border-radius:8px;font-size:12px;background:#fff">
+      </div>
+      <button class="btn" onclick="addRollout()" style="background:var(--brand);color:#fff">➕ 添加评测</button>
+      <button class="btn" onclick="autoImport()">📂 一键导入目录视频</button>
+      <span id="add-hint" style="font-size:12px;color:var(--muted)"></span>
+    </div>
     <table>
       <thead><tr>
-        <th>#</th><th>视频</th><th>实验</th><th>检查点</th><th>结果</th><th>归因条数</th><th>备注</th>
+        <th>#</th><th>视频</th><th>实验</th><th>检查点</th><th>结果</th><th>归因条数</th><th>备注</th><th></th>
       </tr></thead>
-      <tbody id="ro-body"><tr><td colspan="7">加载中…</td></tr></tbody>
+      <tbody id="ro-body"><tr><td colspan="8">加载中…</td></tr></tbody>
     </table>
   </div>
 
@@ -187,6 +203,8 @@ async function loadRollouts() {
       <td><span style="color:${color};font-weight:600">${label}</span></td>
       <td>${r.annotation_count}</td>
       <td style="max-width:220px;font-size:12px;color:var(--muted)">${r.notes || ''}</td>
+      <td><button class="btn" onclick="event.stopPropagation(); delRollout(${r.id})"
+                  style="color:#dc2626">删除</button></td>
     </tr>`;
   }).join('') || '<tr><td colspan="7">暂无 rollout，运行 seed_rollouts.py 登记</td></tr>';
 }
@@ -280,7 +298,60 @@ async function loadReport() {
       </div>`).join('')
     : '<div style="font-size:12px;color:var(--muted)">暂无建议（对失败 rollout 运行 AI 归因后自动生成）</div>';
 }
-loadStats(); loadDatasets(); loadExperiments(); loadRollouts(); loadReport();
+async function loadCheckpoints() {
+  const rows = await (await fetch('/api/checkpoints')).json();
+  document.getElementById('ckpt-select').innerHTML = rows.map(c =>
+    `<option value="${c.id}">${c.experiment_name} @ ${c.step ?? 'last'}</option>`
+  ).join('') || '<option value="">（无检查点）</option>';
+}
+async function addRollout() {
+  const hint = document.getElementById('add-hint');
+  const ckptId = document.getElementById('ckpt-select').value;
+  const fileEl = document.getElementById('video-file');
+  if (!ckptId) return alert('请先选择检查点');
+  if (!fileEl.files.length) return alert('请先选择要上传的视频文件');
+  hint.textContent = '上传中…';
+  try {
+    const fd = new FormData();
+    fd.append('file', fileEl.files[0]);
+    const up = await fetch('/api/upload', { method: 'POST', body: fd });
+    if (!up.ok) throw new Error('上传失败 ' + up.status);
+    const { path } = await up.json();
+    const r = await fetch('/api/rollouts', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ checkpoint_id: Number(ckptId), video_path: path, result: 'unknown' })
+    });
+    if (!r.ok) throw new Error('登记失败 ' + r.status);
+    hint.textContent = `✅ 已添加：${path.split('/').pop()}`;
+    fileEl.value = '';
+    loadRollouts(); loadStats(); loadReport();
+  } catch (e) {
+    hint.textContent = '❌ ' + e.message;
+  }
+}
+async function delRollout(id) {
+  if (!confirm(`确定删除 Rollout #${id} 吗？（视频文件会保留在磁盘上）`)) return;
+  await fetch(`/api/rollouts/${id}`, { method: 'DELETE' });
+  if (currentRollout === id) {
+    currentRollout = null;
+    document.getElementById('player-panel').classList.remove('show');
+    document.getElementById('player').src = '';
+  }
+  loadRollouts(); loadStats(); loadReport();
+}
+async function autoImport() {
+  const hint = document.getElementById('add-hint');
+  const ckptId = document.getElementById('ckpt-select').value;
+  hint.textContent = '扫描目录中…';
+  const r = await fetch('/api/rollouts/auto-import', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ checkpoint_id: ckptId ? Number(ckptId) : null })
+  });
+  const d = await r.json();
+  hint.textContent = `✅ 新增 ${d.created} 条，跳过已存在 ${d.skipped} 条`;
+  loadRollouts(); loadStats(); loadReport();
+}
+loadStats(); loadDatasets(); loadExperiments(); loadRollouts(); loadReport(); loadCheckpoints();
 </script>
 </body>
 </html>
