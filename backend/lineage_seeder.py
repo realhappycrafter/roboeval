@@ -67,14 +67,21 @@ def _step_from_dir(path: Path) -> int | None:
     return None
 
 
-def discover() -> list[dict]:
-    """返回 [{name, source, job_dir, config, ckpts:[(step, path)]}]"""
+def discover(roots: list[tuple[str, Path]] | None = None) -> list[dict]:
+    """返回 [{name, source, job_dir, hyperparams, ckpts:[(step, path)]}]
+
+    roots: [(来源标签, 目录)]，默认用内置 OUTPUT_ROOTS。
+    每个 root 可以是 train 根目录（含多个 job 子目录），或单个 job 目录（自身含 checkpoints）。
+    """
     jobs: dict[tuple[str, str], dict] = {}
-    for source, root in OUTPUT_ROOTS:
+    for source, root in (roots if roots is not None else OUTPUT_ROOTS):
         if not root.exists():
             print(f"[seeder] 根目录不存在，跳过: {root}")
             continue
-        for job_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+        job_dirs = [root] if (root / "checkpoints").is_dir() else [
+            p for p in sorted(root.iterdir()) if p.is_dir()
+        ]
+        for job_dir in job_dirs:
             configs = sorted(job_dir.glob("checkpoints/**/pretrained_model/train_config.json"))
             if not configs:
                 continue
@@ -106,16 +113,21 @@ def discover() -> list[dict]:
     return out
 
 
-def main() -> None:
+def register(experiments: list[dict], replace_existing: bool = True) -> tuple[int, int]:
+    """把实验列表写入数据库，返回 (实验数, 检查点数)。
+
+    replace_existing=True 时覆盖同名同来源的实验（用于刷新）。
+    """
     init_db()
     conn = get_conn()
-    conn.execute("DELETE FROM annotations")
-    conn.execute("DELETE FROM rollouts")
-    conn.execute("DELETE FROM checkpoints")
-    conn.execute("DELETE FROM experiments")
-
-    for exp in discover():
+    n_exp = n_ck = 0
+    for exp in experiments:
         hp = exp["hyperparams"]
+        if replace_existing:
+            old = conn.execute("SELECT id FROM experiments WHERE name=?", (exp["name"],)).fetchone()
+            if old:
+                conn.execute("DELETE FROM checkpoints WHERE experiment_id=?", (old["id"],))
+                conn.execute("DELETE FROM experiments WHERE id=?", (old["id"],))
         cur = conn.execute(
             "INSERT INTO experiments (name, model, dataset_names, hyperparams, log_path, notes)"
             " VALUES (?,?,?,?,?,?)",
@@ -125,7 +137,7 @@ def main() -> None:
                 hp.get("dataset_repo"),
                 json.dumps(hp, ensure_ascii=False),
                 str(exp["job_dir"]),
-                NOTES.get(exp["name"].split(" [")[0], ""),
+                exp.get("notes") or NOTES.get(exp["name"].split(" [")[0], ""),
             ),
         )
         exp_id = cur.lastrowid
@@ -134,17 +146,32 @@ def main() -> None:
                 "INSERT INTO checkpoints (experiment_id, step, path) VALUES (?,?,?)",
                 (exp_id, step, ckpt_path),
             )
+            n_ck += 1
+        n_exp += 1
         print(
             f"[seeder] {exp['name']}: model={hp.get('policy_type')}, steps={hp.get('steps')}, "
             f"lr={hp.get('lr')}, batch={hp.get('batch_size')}, dataset={hp.get('dataset_repo')}, "
             f"检查点 {len(exp['ckpts'])} 个"
         )
-
     conn.commit()
-    n = conn.execute("SELECT COUNT(*) c FROM experiments").fetchone()["c"]
-    nck = conn.execute("SELECT COUNT(*) c FROM checkpoints").fetchone()["c"]
+    total_exp = conn.execute("SELECT COUNT(*) c FROM experiments").fetchone()["c"]
+    total_ck = conn.execute("SELECT COUNT(*) c FROM checkpoints").fetchone()["c"]
     conn.close()
-    print(f"[seeder] 完成：experiments={n}, checkpoints={nck}")
+    return n_exp, n_ck
+
+
+def main() -> None:
+    # 全量重建：先清空下游关联表
+    conn = get_conn()
+    conn.execute("DELETE FROM annotations")
+    conn.execute("DELETE FROM rollouts")
+    conn.execute("DELETE FROM checkpoints")
+    conn.execute("DELETE FROM experiments")
+    conn.commit()
+    conn.close()
+
+    n_exp, n_ck = register(discover())
+    print(f"[seeder] 完成：experiments={n_exp}, checkpoints={n_ck}")
 
 
 if __name__ == "__main__":
