@@ -59,55 +59,82 @@ def scan_dataset(dataset_dir: Path, source: str) -> dict | None:
     }
 
 
+def scan_directory(root: Path, source: str) -> list[dict]:
+    """扫描任意目录：root 本身是数据集则收它，否则遍历其直接子目录找数据集。"""
+    if not root.exists() or not root.is_dir():
+        raise ValueError(f"目录不存在或不是目录: {root}")
+    recs = []
+    if (root / "meta" / "info.json").exists():
+        rec = scan_dataset(root, source)
+        if rec:
+            recs.append(rec)
+    else:
+        for child in sorted(root.iterdir()):
+            if child.is_dir():
+                rec = scan_dataset(child, source)
+                if rec:
+                    recs.append(rec)
+    return recs
+
+
+def ingest(recs: list[dict]) -> tuple[int, int]:
+    """把扫描结果写入数据库，返回 (数据集数, episode 数)。"""
+    conn = get_conn()
+    n_ds = n_ep = 0
+    for rec in recs:
+        conn.execute(
+            "INSERT OR REPLACE INTO datasets (name, path, source, robot_type, fps,"
+            " total_episodes, total_frames, cameras) VALUES (?,?,?,?,?,?,?,?)",
+            (rec["name"], rec["path"], rec["source"], rec["robot_type"], rec["fps"],
+             rec["total_episodes"], rec["total_frames"], rec["cameras"]),
+        )
+        row = conn.execute("SELECT id FROM datasets WHERE name=? AND source=?",
+                           (rec["name"], rec["source"])).fetchone()
+        if row is None:
+            continue
+        ds_id = row["id"]
+        conn.execute("DELETE FROM episodes WHERE dataset_id=?", (ds_id,))
+        for ep in rec["episodes"]:
+            conn.execute(
+                "INSERT OR IGNORE INTO episodes (dataset_id, episode_index, length, task)"
+                " VALUES (?,?,?,?)",
+                (ds_id, ep["episode_index"], ep["length"], ep["task"]),
+            )
+            n_ep += 1
+        n_ds += 1
+    conn.commit()
+    conn.close()
+    return n_ds, n_ep
+
+
 def run_scan(reset: bool = False) -> dict:
-    """全量扫描并写库。reset=True 时清空 datasets/episodes 重建。"""
+    """全量扫描内置根目录并写库。reset=True 时清空 datasets/episodes 重建。"""
     from db import init_db
 
     init_db()
-    conn = get_conn()
     if reset:
+        conn = get_conn()
         conn.execute("DELETE FROM episodes")
         conn.execute("DELETE FROM datasets")
         conn.commit()
+        conn.close()
 
-    found, inserted_ds, inserted_ep = [], 0, 0
+    all_recs: list[dict] = []
     for source, root in SCAN_ROOTS:
         if not root.exists():
             print(f"[scanner] 跳过不存在的根目录: {root}")
             continue
-        for child in sorted(root.iterdir()):
-            if not child.is_dir():
-                continue
-            rec = scan_dataset(child, source)
-            if rec is None:
-                continue
-            found.append(rec["name"])
-            cur = conn.execute(
-                "INSERT OR REPLACE INTO datasets (name, path, source, robot_type, fps,"
-                " total_episodes, total_frames, cameras) VALUES (?,?,?,?,?,?,?,?)",
-                (
-                    rec["name"], rec["path"], rec["source"], rec["robot_type"],
-                    rec["fps"], rec["total_episodes"], rec["total_frames"], rec["cameras"],
-                ),
-            )
-            ds_id = cur.lastrowid
-            conn.execute("DELETE FROM episodes WHERE dataset_id=?", (ds_id,))
-            for ep in rec["episodes"]:
-                conn.execute(
-                    "INSERT OR IGNORE INTO episodes (dataset_id, episode_index, length, task)"
-                    " VALUES (?,?,?,?)",
-                    (ds_id, ep["episode_index"], ep["length"], ep["task"]),
-                )
-                inserted_ep += 1
-            inserted_ds += 1
+        recs = scan_directory(root, source)
+        print(f"[scanner] {root} -> 发现 {len(recs)} 个数据集")
+        all_recs.extend(recs)
+    n_ds, n_ep = ingest(all_recs)
 
-    conn.commit()
-    n_ds = conn.execute("SELECT COUNT(*) c FROM datasets").fetchone()["c"]
-    n_ep = conn.execute("SELECT COUNT(*) c FROM episodes").fetchone()["c"]
+    conn = get_conn()
+    total_ds = conn.execute("SELECT COUNT(*) c FROM datasets").fetchone()["c"]
+    total_ep = conn.execute("SELECT COUNT(*) c FROM episodes").fetchone()["c"]
     conn.close()
-    print(f"[scanner] 发现 {len(found)} 个数据集 {found}")
-    print(f"[scanner] 入库：数据集 {inserted_ds} 个 / episodes {inserted_ep} 条；库内总计 {n_ds} 集 / {n_ep} 条")
-    return {"datasets": n_ds, "episodes": n_ep}
+    print(f"[scanner] 本次入库 {n_ds} 集 / {n_ep} 条；库内总计 {total_ds} 集 / {total_ep} 条")
+    return {"datasets": total_ds, "episodes": total_ep, "imported": n_ds}
 
 
 if __name__ == "__main__":
