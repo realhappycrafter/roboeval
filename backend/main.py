@@ -4,10 +4,11 @@
 启动（项目根 AIC2026/roboeval/ 下）：
     ../venv python -m uvicorn backend.main:app --port 8000
 """
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -98,6 +99,73 @@ def list_experiments():
     return rows
 
 
+@app.get("/api/checkpoints")
+def list_checkpoints():
+    """检查点下拉数据：实验名 + 步数。"""
+    conn = get_conn()
+    rows = [dict(r) for r in conn.execute(
+        """SELECT ck.id, ck.step, e.name AS experiment_name, e.model
+           FROM checkpoints ck JOIN experiments e ON e.id = ck.experiment_id
+           ORDER BY e.name, COALESCE(ck.step, 0)"""
+    )]
+    conn.close()
+    return rows
+
+
+@app.post("/api/upload")
+async def upload_video(file: UploadFile = File(...)):
+    """上传评测视频到 assets/rollouts/，返回相对路径。"""
+    rollout_dir = BASE_DIR.parent / "assets" / "rollouts"
+    rollout_dir.mkdir(parents=True, exist_ok=True)
+    original = Path(file.filename or "video.mp4")
+    suffix = original.suffix or ".mp4"
+    safe = re.sub(r"[^\w\u4e00-\u9fff.-]", "_", original.stem) or "video"
+    target = rollout_dir / f"{safe}{suffix}"
+    i = 1
+    while target.exists():
+        target = rollout_dir / f"{safe}_{i}{suffix}"
+        i += 1
+    data = await file.read()
+    target.write_bytes(data)
+    return {"path": f"rollouts/{target.name}", "size": len(data)}
+
+
+@app.post("/api/rollouts/auto-import")
+def auto_import_rollouts(payload: dict | None = None):
+    """扫描 assets/rollouts/ 下所有未登记的视频，批量创建 rollout。"""
+    payload = payload or {}
+    checkpoint_id = payload.get("checkpoint_id")
+    rollout_dir = BASE_DIR.parent / "assets" / "rollouts"
+    if not rollout_dir.exists():
+        return {"created": 0, "skipped": 0, "items": []}
+    conn = get_conn()
+    if not checkpoint_id:
+        row = conn.execute(
+            "SELECT id FROM checkpoints ORDER BY COALESCE(step, 0) DESC LIMIT 1"
+        ).fetchone()
+        checkpoint_id = row["id"] if row else None
+    if checkpoint_id is None:
+        conn.close()
+        raise HTTPException(422, "尚无检查点，请先运行 lineage_seeder.py")
+    created, skipped = [], 0
+    for f in sorted(rollout_dir.iterdir()):
+        if f.suffix.lower() not in (".mp4", ".webm", ".avi", ".mov", ".mkv"):
+            continue
+        rel = f"rollouts/{f.name}"
+        if conn.execute("SELECT id FROM rollouts WHERE video_path=?", (rel,)).fetchone():
+            skipped += 1
+            continue
+        cur = conn.execute(
+            "INSERT INTO rollouts (checkpoint_id, video_path, result, notes) VALUES (?,?,?,?)",
+            (checkpoint_id, rel, "unknown", "自动导入：目录扫描"),
+        )
+        created.append({"id": cur.lastrowid, "path": rel})
+    conn.commit()
+    conn.close()
+    return {"created": len(created), "skipped": skipped, "items": created,
+            "checkpoint_id": checkpoint_id}
+
+
 @app.get("/api/rollouts")
 def list_rollouts():
     conn = get_conn()
@@ -132,6 +200,19 @@ def create_rollout(payload: dict):
     rid = cur.lastrowid
     conn.close()
     return {"id": rid}
+
+
+@app.delete("/api/rollouts/{rollout_id}")
+def delete_rollout(rollout_id: int):
+    """删除评测记录（不删除视频文件，避免误删素材）。"""
+    conn = get_conn()
+    cur = conn.execute("DELETE FROM rollouts WHERE id=?", (rollout_id,))
+    conn.commit()
+    n = cur.rowcount
+    conn.close()
+    if n == 0:
+        raise HTTPException(404, "rollout not found")
+    return {"id": rollout_id, "deleted": True}
 
 
 @app.post("/api/rollouts/{rollout_id}/result")
