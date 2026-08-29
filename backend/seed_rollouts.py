@@ -5,7 +5,7 @@ from pathlib import Path
 from db import get_conn, init_db
 
 SEED = [
-    # (实验名, 检查点 step, 素材相对路径, 初始结果, 备注)
+    # (实验名前缀, 检查点 step（数字或 'last'）, 素材相对路径, 初始结果, 备注)
     ("act_so101_test", "last", "rollouts/eval_act_so101_test_20260803.mp4", "unknown",
      "训练后真机评测录像（微信传输），内容待标注/AI归因"),
 ]
@@ -15,14 +15,22 @@ def main() -> None:
     init_db()
     conn = get_conn()
     for exp_name, ckpt_step, rel, result, notes in SEED:
-        exp = conn.execute("SELECT id FROM experiments WHERE name=?", (exp_name,)).fetchone()
+        exp = conn.execute(
+            "SELECT id FROM experiments WHERE name LIKE ? ORDER BY id LIMIT 1", (f"{exp_name}%",)
+        ).fetchone()
         if exp is None:
             print(f"[seed] 实验不存在，跳过: {exp_name}")
             continue
-        ck = conn.execute(
-            "SELECT id FROM checkpoints WHERE experiment_id=? AND (step=? OR step IS NULL)",
-            (exp["id"], int(ckpt_step) if ckpt_step.isdigit() else -1),
-        ).fetchone()
+        if ckpt_step.isdigit():
+            ck = conn.execute(
+                "SELECT id FROM checkpoints WHERE experiment_id=? AND step=?",
+                (exp["id"], int(ckpt_step)),
+            ).fetchone()
+        else:  # 'last' 等标签：取步数最大的检查点
+            ck = conn.execute(
+                "SELECT id FROM checkpoints WHERE experiment_id=? ORDER BY COALESCE(step,0) DESC LIMIT 1",
+                (exp["id"],),
+            ).fetchone()
         if ck is None:
             print(f"[seed] 检查点不存在，跳过: {exp_name}@{ckpt_step}")
             continue
